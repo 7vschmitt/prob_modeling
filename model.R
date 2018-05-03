@@ -3,11 +3,13 @@ library('MASS')
 n <- 12000
 k <- 4
 
-aBarAlpha # ?
-bBarAlpha # ?
+aBarAlpha = 0.5
+bBarAlpha = 0.5
 
-aBarBeta # ?
-bBarBeta # ?
+aBarBeta = 0.5
+bBarBeta = 0.5
+
+#in Appendix on page 1410
 
 thetaBarPsi # ?
 sigmaBarPsi # ?
