@@ -6,19 +6,19 @@ library('MASS')
 n <- 200 #12000
 k <- 4
 
-aBarAlpha = 0.5
-bBarAlpha = 0.5
-
-aBarBeta = 0.5
-bBarBeta = 0.5
-
-alpha.k <- rgamma(n = n, shape = aBarAlpha, rate = bBarAlpha) # do that for each type combination ?
-beta.k <- rgamma(n = n, shape = aBarBeta, rate = bBarBeta) # do this for all K-1 types
-psi <- mvrnorm(n = n, mean = thetaBarPsi, sd = sigmaBarPsi)
-
-
-thetaBarPsi # ?
-sigmaBarPsi # ?
+# aBarAlpha = 0.5
+# bBarAlpha = 0.5
+# 
+# aBarBeta = 0.5
+# bBarBeta = 0.5
+# 
+# alpha.k <- rgamma(n = n, shape = aBarAlpha, rate = bBarAlpha) # do that for each type combination ?
+# beta.k <- rgamma(n = n, shape = aBarBeta, rate = bBarBeta) # do this for all K-1 types
+# psi <- mvrnorm(n = n, mean = thetaBarPsi, sd = sigmaBarPsi)
+# 
+# 
+# thetaBarPsi # ?
+# sigmaBarPsi # ?
 
 #alpha_j_k: mutually exciting effects between different types of points
 alpha_j_k <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
