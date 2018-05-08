@@ -28,11 +28,11 @@ $\alpha_{jk} \sim Gamma(\bar{a}_{\alpha}, \bar{b}_{\alpha})$
 ```{r}
 ad_types <- c("search", "display", "other", "purchase")
 K <- length(ad_types)
-alpha_j_k <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
+alpha_mean <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
                       0.1614, 1.7818, 0.2055, 0.0845,
                       0.4647, 0.1270, 8.0526, 0.8384), nrow = 3, ncol = 4)
-row.names(alpha_j_k) <- ad_types[1:3]
-colnames(alpha_j_k) <- ad_types
+row.names(alpha_mean) <- ad_types[1:3]
+colnames(alpha_mean) <- ad_types
 
 alpha_j_k_sd <- matrix(c(0.1765, 0.0214, 0.0562, 0.0633,
                       0.0496, 0.2314, 0.0572, 0.0347,
@@ -42,9 +42,10 @@ beta_j <- c(34.0188, 46.8854, 51.5114)
 beta_j_sd <- c(1.7426, 4.9370, 2.3241)
 names(beta_j) <- ad_types[1:3]
 
-theta_mu <- c(-5.3926, -6.1027, -5.8063, -9.7704) 
-theta_mu_sd <- c(0.0166, 0.0212, 0.0221, 0.0762) 
-names(theta_mu) <- ad_types
+theta_theta_mu_mean <- c(-5.3926, -6.1027, -5.8063, -9.7704) 
+theta_theta_mu_sigma <- c(0.0166, 0.0212, 0.0221, 0.0762) 
+names(theta_theta_mu_mean) <- ad_types
+names(theta_theta_mu_sigma) <- ad_types
 
 Sigma_mu <- matrix(c(0.4584, -0.1197, -0.4942, 0.2256,
                      -0.1197, 0.5934, -0.3380, -0.4157,
@@ -59,9 +60,10 @@ Sigma_mu_sd <- matrix(c(0.0246, -0.0212, 0.0257, 0.1228,
 row.names(Sigma_mu) <- ad_types
 colnames(Sigma_mu) <- ad_types
   
-psi_k <- c(-0.5664, -0.7556, -0.6235, 0.2787)
-psi_k_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
-names(psi_k) <- ad_types
+theta_psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
+theta_psi_sigma <- c(0.1228, 0.2348, 0.1229, 0.2160)
+names(psi_k_mean) <- ad_types
+names(psi_k_sigma) <- ad_types
 ```
 
 ```{r results = 'asis'}
@@ -73,7 +75,7 @@ knitr::kable(beta_j, caption = "beta", escape = F)
 ```
 
 ```{r results = 'asis'}
-knitr::kable(theta_mu, caption = "theta", escape = F)
+knitr::kable(theta_theta_mu_mean, caption = "theta", escape = F)
 ```
 
 ```{r results = 'asis'}
@@ -81,7 +83,7 @@ knitr::kable(Sigma_mu, caption = "Sigma", escape = F)
 ```
 
 ```{r results = 'asis'}
-knitr::kable(psi_k, caption = "psi", escape = F)
+knitr::kable(theta_psi_mean, caption = "psi", escape = F)
 ```
 
 # Simulate Data
@@ -96,6 +98,13 @@ for(j in c(1:nrow(alpha_j_k))) {
     alpha[j,k] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
   }
 }
+
+```
+
+draw psi
+```{r}
+psi <- numeric()
+
 
 ```
 
