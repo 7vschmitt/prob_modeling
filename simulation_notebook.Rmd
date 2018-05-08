@@ -97,5 +97,11 @@ for(j in c(1:nrow(alpha_j_k))) {
   }
 }
 
+beta <- numeric()
+  for(j in c(1:length(beta_j))) {
+    gam <- gammaShRaFromMeanSD(mean = beta_j[j], sd = beta_j_sd[j])
+    beta[j] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
+}
 ```
+
 
