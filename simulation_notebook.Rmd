@@ -81,8 +81,13 @@ knitr::kable(psi_k, caption = "psi", escape = F)
 ## Draw Parameters
 1. Draw $\alpha, \beta, \psi, \theta_{\mu}, \Sigma_{\mu}$ and generate $\mu^i \sim MVN_K(\theta_{\mu}, \Sigma_{\mu})$ to simulate the behaviour of a representative customer.
 ```{r}
-gam <- gammaShRaFromMeanSD(mean = 2.817, sd = 0.1765)
-dgamma(x, shape = gam$shape, rate = gam$rate)
+alpha <- matrix(nrow = nrow(alpha_j_k), ncol = ncol(alpha_j_k))
+for(j in c(1:nrow(alpha_j_k))) {
+  for(k in c(1:ncol(alpha_j_k))) {
+    gam <- gammaShRaFromMeanSD(mean = alpha_j_k[j,k], sd = alpha_j_k_sd[j,k])
+    alpha[j,k] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
+  }
+}
 
 ```
 
