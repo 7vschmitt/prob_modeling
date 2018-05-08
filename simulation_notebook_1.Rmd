@@ -1,0 +1,100 @@
+---
+title: "Point Process Simulation"
+output: pdf_document
+---
+
+```{r echo=FALSE}
+library('MASS')
+knitr::opts_chunk$set(echo = FALSE)
+```
+```{r}
+gammaShRaFromMeanSD = function( mean , sd ) {
+  if ( mean <=0 ) stop("mean must be > 0")
+  if ( sd <=0 ) stop("sd must be > 0")
+  shape = mean^2/sd^2
+  rate = mean/sd^2
+  return( list( shape=shape , rate=rate ) )
+}
+```
+
+
+
+# Proposed Model
+$\alpha_{jk} \sim Gamma(\bar{a}_{\alpha}, \bar{b}_{\alpha})$
+
+
+
+# Estimated Parameters
+```{r}
+ad_types <- c("search", "display", "other", "purchase")
+K <- length(ad_types)
+alpha_j_k <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
+                      0.1614, 1.7818, 0.2055, 0.0845,
+                      0.4647, 0.1270, 8.0526, 0.8384), nrow = 3, ncol = 4)
+row.names(alpha_j_k) <- ad_types[1:3]
+colnames(alpha_j_k) <- ad_types
+
+alpha_j_k_sd <- matrix(c(0.1765, 0.0214, 0.0562, 0.0633,
+                      0.0496, 0.2314, 0.0572, 0.0347,
+                      0.0654, 0.0367, 0.4117, 0.0867), nrow = 3, ncol = 4)
+
+beta_j <- c(34.0188, 46.8854, 51.5114)
+beta_j_sd <- c(1.7426, 4.9370, 2.3241)
+names(beta_j) <- ad_types[1:3]
+
+theta_mu <- c(-5.3926, -6.1027, -5.8063, -9.7704) 
+theta_mu_sd <- c(0.0166, 0.0212, 0.0221, 0.0762) 
+names(theta_mu) <- ad_types
+
+Sigma_mu <- matrix(c(0.4584, -0.1197, -0.4942, 0.2256,
+                     -0.1197, 0.5934, -0.3380, -0.4157,
+                     -0.4942, -0.3380, 1.0014, 0.0762,
+                     0.2256, -0.4157, 0.0762, 2.3914), nrow = 4, ncol = 4)
+
+Sigma_mu_sd <- matrix(c(0.0246, -0.0212, 0.0257, 0.1228,
+                     0.0212, 0.0335, 0.0304, 0.1665,
+                     0.0257, 0.0304, 0.0365, 0.2440,
+                     0.1228, 0.1665, 0.2440, 0.2575), nrow = 4, ncol = 4)
+
+row.names(Sigma_mu) <- ad_types
+colnames(Sigma_mu) <- ad_types
+  
+psi_k <- c(-0.5664, -0.7556, -0.6235, 0.2787)
+psi_k_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
+names(psi_k) <- ad_types
+```
+
+```{r results = 'asis'}
+knitr::kable(alpha_j_k, caption = "alpha", escape = F)
+```
+
+```{r results = 'asis'}
+knitr::kable(beta_j, caption = "beta", escape = F)
+```
+
+```{r results = 'asis'}
+knitr::kable(theta_mu, caption = "theta", escape = F)
+```
+
+```{r results = 'asis'}
+knitr::kable(Sigma_mu, caption = "Sigma", escape = F)
+```
+
+```{r results = 'asis'}
+knitr::kable(psi_k, caption = "psi", escape = F)
+```
+
+# Simulate Data
+
+## Draw Parameters
+1. Draw $\alpha, \beta, \psi, \theta_{\mu}, \Sigma_{\mu}$ and generate $\mu^i \sim MVN_K(\theta_{\mu}, \Sigma_{\mu})$ to simulate the behaviour of a representative customer.
+```{r}
+alpha <- matrix(nrow = nrow(alpha_j_k), ncol = ncol(alpha_j_k))
+for(j in c(1:nrow(alpha_j_k))) {
+  for(k in c(1:ncol(alpha_j_k))) {
+    gam <- gammaShRaFromMeanSD(mean = alpha_j_k[j,k], sd = alpha_j_k_sd[j,k])
+    alpha[j,k] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
+  }
+}
+
+```
