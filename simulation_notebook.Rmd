@@ -34,20 +34,20 @@ alpha_mean <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
 row.names(alpha_mean) <- ad_types[1:3]
 colnames(alpha_mean) <- ad_types
 
-alpha_j_k_sd <- matrix(c(0.1765, 0.0214, 0.0562, 0.0633,
+alpha_sd <- matrix(c(0.1765, 0.0214, 0.0562, 0.0633,
                       0.0496, 0.2314, 0.0572, 0.0347,
                       0.0654, 0.0367, 0.4117, 0.0867), nrow = 3, ncol = 4)
 
-beta_j <- c(34.0188, 46.8854, 51.5114)
-beta_j_sd <- c(1.7426, 4.9370, 2.3241)
-names(beta_j) <- ad_types[1:3]
+beta_mean <- c(34.0188, 46.8854, 51.5114)
+beta_sd <- c(1.7426, 4.9370, 2.3241)
+names(beta_mean) <- ad_types[1:3]
 
-theta_theta_mu_mean <- c(-5.3926, -6.1027, -5.8063, -9.7704) 
-theta_theta_mu_sigma <- c(0.0166, 0.0212, 0.0221, 0.0762) 
-names(theta_theta_mu_mean) <- ad_types
-names(theta_theta_mu_sigma) <- ad_types
+theta_mu_mean <- c(-5.3926, -6.1027, -5.8063, -9.7704) 
+theta_mu_sd <- c(0.0166, 0.0212, 0.0221, 0.0762) 
+names(theta_mu_mean) <- ad_types
+names(theta_mu_sd) <- ad_types
 
-Sigma_mu <- matrix(c(0.4584, -0.1197, -0.4942, 0.2256,
+Sigma_mu_mean <- matrix(c(0.4584, -0.1197, -0.4942, 0.2256,
                      -0.1197, 0.5934, -0.3380, -0.4157,
                      -0.4942, -0.3380, 1.0014, 0.0762,
                      0.2256, -0.4157, 0.0762, 2.3914), nrow = 4, ncol = 4)
@@ -57,33 +57,33 @@ Sigma_mu_sd <- matrix(c(0.0246, -0.0212, 0.0257, 0.1228,
                      0.0257, 0.0304, 0.0365, 0.2440,
                      0.1228, 0.1665, 0.2440, 0.2575), nrow = 4, ncol = 4)
 
-row.names(Sigma_mu) <- ad_types
-colnames(Sigma_mu) <- ad_types
+row.names(Sigma_mu_mean) <- ad_types
+colnames(Sigma_mu_mean) <- ad_types
   
-theta_psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
-theta_psi_sigma <- c(0.1228, 0.2348, 0.1229, 0.2160)
-names(psi_k_mean) <- ad_types
-names(psi_k_sigma) <- ad_types
+psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
+psi_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
+names(psi_mean) <- ad_types
+names(psi_sd) <- ad_types
 ```
 
 ```{r results = 'asis'}
-knitr::kable(alpha_j_k, caption = "alpha", escape = F)
+knitr::kable(alpha_mean, caption = "alpha", escape = F)
 ```
 
 ```{r results = 'asis'}
-knitr::kable(beta_j, caption = "beta", escape = F)
+knitr::kable(beta_mean, caption = "beta", escape = F)
 ```
 
 ```{r results = 'asis'}
-knitr::kable(theta_theta_mu_mean, caption = "theta", escape = F)
+knitr::kable(theta_mu_mean, caption = "theta", escape = F)
 ```
 
 ```{r results = 'asis'}
-knitr::kable(Sigma_mu, caption = "Sigma", escape = F)
+knitr::kable(Sigma_mu_mean, caption = "Sigma", escape = F)
 ```
 
 ```{r results = 'asis'}
-knitr::kable(theta_psi_mean, caption = "psi", escape = F)
+knitr::kable(psi_mean, caption = "psi", escape = F)
 ```
 
 # Simulate Data
@@ -91,10 +91,10 @@ knitr::kable(theta_psi_mean, caption = "psi", escape = F)
 ## Draw Parameters
 1. Draw $\alpha, \beta, \psi, \theta_{\mu}, \Sigma_{\mu}$ and generate $\mu^i \sim MVN_K(\theta_{\mu}, \Sigma_{\mu})$ to simulate the behaviour of a representative customer.
 ```{r}
-alpha <- matrix(nrow = nrow(alpha_j_k), ncol = ncol(alpha_j_k))
-for(j in c(1:nrow(alpha_j_k))) {
-  for(k in c(1:ncol(alpha_j_k))) {
-    gam <- gammaShRaFromMeanSD(mean = alpha_j_k[j,k], sd = alpha_j_k_sd[j,k])
+alpha <- matrix(nrow = nrow(alpha_mean), ncol = ncol(alpha_mean))
+for(j in c(1:nrow(alpha_mean))) {
+  for(k in c(1:ncol(alpha_mean))) {
+    gam <- gammaShRaFromMeanSD(mean = alpha_mean[j,k], sd = alpha_sd[j,k])
     alpha[j,k] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
   }
 }
@@ -102,8 +102,8 @@ psi <- numeric()
 
 
 beta <- numeric()
-  for(j in c(1:length(beta_j))) {
-    gam <- gammaShRaFromMeanSD(mean = beta_j[j], sd = beta_j_sd[j])
+for(j in c(1:length(beta_mean))) {
+    gam <- gammaShRaFromMeanSD(mean = beta_mean[j], sd = beta_sd[j])
     beta[j] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
 }
 ```
