@@ -4,8 +4,9 @@ output: pdf_document
 ---
 
 ```{r echo=FALSE}
-library('MASS')
-knitr::opts_chunk$set(echo = FALSE)
+suppressMessages(library(MASS))
+suppressMessages(library(dplyr))
+knitr::opts_chunk$set(echo = FALSE, cache = T)
 ```
 ```{r}
 gammaShRaFromMeanSD = function( mean , sd ) {
@@ -98,14 +99,48 @@ for(j in c(1:nrow(alpha_mean))) {
     alpha[j,k] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
   }
 }
-psi <- numeric()
-
 
 beta <- numeric()
 for(j in c(1:length(beta_mean))) {
     gam <- gammaShRaFromMeanSD(mean = beta_mean[j], sd = beta_sd[j])
     beta[j] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
 }
+
+##### Use means until we found a way to create distributions to draw from! #####
+# psi <- psi_mean
+# TODO: check if we can use diagonal of sd here 
+psi <- mvrnorm(mu = psi_mean, Sigma = psi_sd * diag(nrow = length(psi_sd)))
+# theta_mu <- theta_mu_mean
+# TODO: check if we can use diagonal of sd here 
+theta_mu <-mvrnorm(mu = theta_mu_mean, Sigma = theta_mu_sd * diag(nrow = length(theta_mu_sd)))
+# TODO: Check how to draw from IW dist. using mean and sd
+Sigma_mu <- Sigma_mu_mean
 ```
+Draw $\mu^i \sim log\text{-}MVN_K(\theta_{\mu}, \Sigma_{\mu})$
+```{r}
+mu <- exp(mvrnorm(mu = theta_mu, Sigma = Sigma_mu))
+```
+2. Simulate point process in $[0,T]$ given $\alpha, \beta, \psi, \mu^i$ and realized type $j_0$ at $t_0=0 \text{,} (j_0 = 1, \dots, K-1)$.
+```{r}
+j_0 <- sample(length(ad_types) - 1, size = 1)
+# TODO: check if t's unit is actually in days
+T <- 30
+```
+    $j_0$ is set to type "`r ad_types[j_0]`" with $T=$ `r T`.
 
-
+    a. initialize $t = 0, n = 0, n_K = 0, m = \sum_{k=1}^K (\mu^i_k+\alpha_{j_ok})$
+```{r}
+t = 0; n = 0; n_K = 0; m = c(alpha[j_0,] + mu) %>% sum
+```
+    b. Repeat until $t>T$
+        (i) Simulate $s \sim Exp(m)$
+        (ii) Set $t = t + s$
+        (iii) Calculate $\lambda$ and $m$
+      
+```{r}
+while(t<=T) {
+  s <- rexp(n = 1, rate = m)
+  t <- t + s
+  
+}
+```
