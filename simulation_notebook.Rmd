@@ -124,13 +124,13 @@ mu <- exp(mvrnorm(mu = theta_mu, Sigma = Sigma_mu))
 ```{r}
 j_0 <- sample(length(ad_types) - 1, size = 1)
 # TODO: check if t's unit is actually in days
-T <- 30
+T <- 120
 ```
     $j_0$ is set to type "`r ad_types[j_0]`" with $T=$ `r T`.
 
     a. initialize $t = 0, n = 0, n_K = 0, m = \sum_{k=1}^K (\mu^i_k+\alpha_{j_ok})$
 ```{r}
-t = 0; n = 0; n_K = 0; m = c(alpha[j_0,] + mu) %>% sum
+t = 0; n = 0; n_K = 0; m = c(alpha[j_0,] + mu) %>% sum; j = integer(); t_j = numeric()
 ```
     b. Repeat until $t>T$
         (i) Simulate $s \sim Exp(m)$
@@ -138,9 +138,52 @@ t = 0; n = 0; n_K = 0; m = c(alpha[j_0,] + mu) %>% sum
         (iii) Calculate $\lambda$ and $m$
       
 ```{r}
-while(t<=T) {
+#sprintf("Initially set m to %f", m)
+hist_intensity_decay <- function(a, b, events, current_time, event_times) {
+  result <- numeric(K)
+  names(result) <- ad_types
+  if(length(events) == 0) return(result)
+  
+  for(k in 1:K){
+    for(idx in 1:length(events)){
+      j_l <- events[idx]
+      if(j_l != K) { # do not consider purchases (K) here
+        result[k] <- result[k] + alpha[j_l, k] * exp(-1 * beta[j_l] * (t - event_times[idx]))
+      }
+    }
+  }
+  return(result)
+}
+
+repeat {
   s <- rexp(n = 1, rate = m)
   t <- t + s
+  #sprintf("t is %f", t)
+  if(!is.nan(t) && t < T){
+    lambda <- mu * exp(psi*n_K) + alpha[j_0, ] * exp(-1 * beta[j_0] * t)
+    lambda <- lambda + hist_intensity_decay(alpha, beta, j, t, t_j)
+    U <- runif(n = 1)
+    if(U <= sum(lambda) / m){
+      #print("Create new event")
+      n <- n + 1
+      t_j[n] <- t
+      j[n] <- which(rmultinom(n = 1, size = 1, prob = lambda/sum(lambda))[,1] %in% c(1)) # choose next click event
+      if(j[n] == K) { # if purchase
+        n_K <- n_K + 1
+        m <- sum(lambda - mu * exp(psi * (n_K -1)) + mu * exp(psi * n_K))
+        #sprintf("Set m to %f for purchase", m)
+      } else {
+        m <- sum(lambda + alpha[j[n], ])
+        #sprintf("Set m to %f for non-purchase", m)
+      }
+    } else {
+      #sprintf("No event created. U is %f", U)
+      m <- sum(lambda)
+      #sprintf("Set m to %f for no new event", m)
+    }
+  }
   
+  if(t > T) break
 }
 ```
+
