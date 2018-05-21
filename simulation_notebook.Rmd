@@ -206,10 +206,27 @@ Simulate for `r sim_cnt` users
 
 ```{r}
 # initialize variable here
+users <- data.frame()
 for(i in 1:sim_cnt) {
+  j_0 <- sample(length(ad_types) - 1, size = 1)
   params <- draw_params()
   data <- do.call(simulate_user_clickstream, params)
+  users <- users %>% 
+    rbind(data_frame(user = rep.int(i, length(data$event)), 
+                     event = data$event, 
+                     timestamp=data$timestamp))
   # add to variable here
 }
+```
+
+```{r}
+ggplot(users, aes(x = timestamp, y = user, 
+                  label = event, color = factor(event), 
+                  shape = factor(event),
+                  xmax = T)) +
+  geom_point(size = 4, alpha = .7) +
+  #geom_text(aes(label = event)) + 
+  geom_hline(aes(yintercept = user), lty="dotted") + 
+  xlim(0, T)
 ```
 
