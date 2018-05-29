@@ -119,6 +119,12 @@ draw_params <- function() {
   theta_mu <- mvrnorm(mu = theta_mu_mean, 
                      Sigma = theta_mu_sd * diag(nrow = length(theta_mu_sd)))
   # TODO: Check how to draw from IW dist. using mean and sd
+  #we need the scale matrix S in orer to draw from the IW distribution, v is the degree of freedom and was set to 1 in the appendix (Step 6) 
+   # TODO:  ceck how to gte the scale matrix with mean and sd 
+  #package for IW: MCMCpack
+  # dra samples from:
+  riwish(v, S)
+  
   Sigma_mu <- Sigma_mu_mean
   mu <- exp(mvrnorm(mu = theta_mu, Sigma = Sigma_mu))
   list(alpha = alpha, beta = beta, psi = psi, 
