@@ -49,7 +49,7 @@ plot_dist <- function(dist, labels=c(), scale = 1, color="skyblue", plot_dist_na
 
 dists <- list(
   mvn_normal = list(
-    name = "~ MVN",
+    name = expression('~ MVN'[k]),
     name_pos = c(0.5, 0.1),
     plot_type = "line",
     x = seq(-3.3, 3.3, 0.01),
@@ -72,7 +72,7 @@ dists <- list(
     name = "~ Inv-Wishart",
     name_pos = c(0.42, 0.1),
     plot_type = "line",
-    x = seq(0, 1.1, 0.01),
+    x = seq(0, 1.5, 1.5),
     top_space = 0,
     ddist = function(x, shape, scale) {scale^shape / gamma(shape) * x^(-shape-1)*exp(-scale/x)},
     ddist_params = list(shape=3, scale=1),
@@ -80,24 +80,24 @@ dists <- list(
   ),
  
   log_normal = list(
-    name = "log-normal",
+    name = expression(~ log-MVN[k]),
     name_pos = c(0.48, 0.1),
     plot_type = "line",
     x = seq(0, 1.7, 0.01),
     top_space = 0,
     ddist = dlnorm,
     ddist_params = list(meanlog=-0.3, sdlog=0.4),
-    labels = list(mean = c(0.5, 0.3), right_sd = c(0.80, 0.5), left_sd = c(0.20, 0.5))
+    labels = list(mean = c(0.4, 0.3), right_sd = c(0.80, 0.5), left_sd = c(0.20, 0.5))
   ),
   log_mvn = list(
-    name = "~ log-MVN",
+    name = expression(~ log-MVN[k]),
     name_pos = c(0.48, 0.1),
     plot_type = "line",
     x = seq(0, 1.7, 0.01),
     top_space = 0,
     ddist = dlnorm,
     ddist_params = list(meanlog=-0.3, sdlog=0.4),
-    labels = list(mean = c(0.4, 0.3), right_sd = c(0.80, 0.5), left_sd = c(0.10, 0.5))
+    labels = list(mean = c(0.45, 0.3), right_sd = c(0.80, 0.5), left_sd = c(0.10, 0.5))
   )
 )
 

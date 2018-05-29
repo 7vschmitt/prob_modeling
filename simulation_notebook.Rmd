@@ -112,6 +112,7 @@ draw_params <- function() {
   }
   
   # TODO: check if we can use diagonal of sd here 
+  # Under the assumption that all psi_ks are independet we can sample with the diagonal of sds, in appendix they calculate psi with the Identity matrix which assumes independence!
   psi <- mvrnorm(mu = psi_mean, 
                  Sigma = psi_sd * diag(nrow = length(psi_sd)))
   # TODO: check if we can use diagonal of sd here 

@@ -9,7 +9,7 @@ source("plot_dist.R")
 
 #level 1:
 #mu|theta, Sigma ~ log MVN dependensies (2)
-plot_dist(dists$log_mvn, labels = c(mean = expression(mu[i]), right_sd = expression(Sigma[mu]), left_sd = expression(Theta[mu])))
+plot_dist(dists$log_mvn, labels = c(mean = expression(mu^i), right_sd = expression(Sigma[mu]), left_sd = expression(Theta[mu])))
 
 
 ######################################################
