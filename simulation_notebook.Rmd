@@ -114,6 +114,7 @@ draw_params <- function() {
       beta[j] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
   }
   
+  # Under the assumption that all psi_ks are independet we can sample with the diagonal of sds, in appendix they calculate psi with the Identity matrix which assumes independence!
   psi <- mvrnorm(mu = psi_mean, 
                  Sigma = psi_sd^2 * diag(nrow = length(psi_sd)))
   theta_mu <- mvrnorm(mu = theta_mu_mean, 
