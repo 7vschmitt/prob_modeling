@@ -7,20 +7,16 @@ output: pdf_document
 suppressMessages(library(MASS))
 suppressMessages(library(dplyr))
 suppressMessages(library(xtable))
+suppressMessages(library(MCMCpack))
 options(xtable.comment = FALSE)
 suppressMessages(library(ggplot2))
 knitr::opts_chunk$set(cache = T)
 ```
 
 
-
-# Proposed Model
-$\alpha_{jk} \sim Gamma(\bar{a}_{\alpha}, \bar{b}_{\alpha})$
-
-
-
 # Estimated Parameters
 ```{r}
+set.seed(1899)
 ad_types <- c("search", "display", "other", "purchase")
 K <- length(ad_types)
 alpha_mean <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
@@ -55,10 +51,12 @@ Sigma_mu_sd <- matrix(c(0.0246, -0.0212, 0.0257, 0.1228,
 row.names(Sigma_mu_mean) <- ad_types
 colnames(Sigma_mu_mean) <- ad_types
   
+inv_df <- 12000 - 1
 psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
 psi_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
 names(psi_mean) <- ad_types
 names(psi_sd) <- ad_types
+
 
 first_click_prob <- c(1199, 418, 811) %>% prop.table()
 ```
@@ -96,6 +94,11 @@ gammaShRaFromMeanSD <- function( mean , sd ) {
   return( list( shape=shape , rate=rate ) )
 }
 
+invParamsWishartFromMeanPAndDF <- function(Sigma_mu_mean, df, dim){
+  scale_matrix <- Sigma_mu_mean*df - Sigma_mu_mean*dim - Sigma_mu_mean
+  return(list(scale_matrix=scale_matrix, df=df, dim=dim))
+}
+
 draw_params <- function() {
   alpha <- matrix(nrow = nrow(alpha_mean), ncol = ncol(alpha_mean))
   for(j in c(1:nrow(alpha_mean))) {
@@ -111,14 +114,14 @@ draw_params <- function() {
       beta[j] <- rgamma(n=1, shape = gam$shape, rate = gam$rate)
   }
   
-  # TODO: check if we can use diagonal of sd here 
   psi <- mvrnorm(mu = psi_mean, 
-                 Sigma = psi_sd * diag(nrow = length(psi_sd)))
-  # TODO: check if we can use diagonal of sd here 
+                 Sigma = psi_sd^2 * diag(nrow = length(psi_sd)))
   theta_mu <- mvrnorm(mu = theta_mu_mean, 
-                     Sigma = theta_mu_sd * diag(nrow = length(theta_mu_sd)))
-  # TODO: Check how to draw from IW dist. using mean and sd
-  Sigma_mu <- Sigma_mu_mean
+                     Sigma = theta_mu_sd^2 * diag(nrow = length(theta_mu_sd)))
+  
+  inv_wishart_params <- invParamsWishartFromMeanPAndDF(Sigma_mu_mean = Sigma_mu_mean, 
+                                                 df = inv_df, dim = length(ad_types))
+  Sigma_mu <- riwish(v = inv_wishart_params$df, S = inv_wishart_params$scale_matrix)
   mu <- exp(mvrnorm(mu = theta_mu, Sigma = Sigma_mu))
   list(alpha = alpha, beta = beta, psi = psi, 
        theta_mu = theta_mu, Sigma_mu = Sigma_mu, mu = mu)
@@ -232,6 +235,7 @@ ggplot(users, aes(x = timestamp, y = user,
                   xmax = T)) +
   geom_point(size = 4, alpha = .7) +
   geom_hline(aes(yintercept = user), lty="dotted") + 
-  xlim(0, T)
+  xlim(0, T) + 
+  ylim(1, sim_cnt)
 ```
 
