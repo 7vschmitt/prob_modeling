@@ -51,7 +51,9 @@ Sigma_mu_sd <- matrix(c(0.0246, -0.0212, 0.0257, 0.1228,
 row.names(Sigma_mu_mean) <- ad_types
 colnames(Sigma_mu_mean) <- ad_types
   
-inv_df <- 12000 - 1
+n <- 12000
+#inv_df <- n - 1
+inv_df <- 7
 psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
 psi_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
 names(psi_mean) <- ad_types
@@ -181,6 +183,9 @@ simulate_user_clickstream <- function(alpha, beta, psi, theta_mu, Sigma_mu, mu) 
       lambda <- mu * exp(psi*n_K) + alpha[j_0, ] * exp(-1 * beta[j_0] * t)
       lambda <- lambda + hist_intensity_decay(alpha, beta, j, t, t_j)
       U <- runif(n = 1)
+      if(is.na(m) || is.na(U)  || NA %in% lambda || is.infinite(m) || Inf %in% lambda) {
+        print(paste("Value is NA ", c(m, U, lambda)))
+      } 
       if(U <= sum(lambda) / m){
         n <- n + 1
         t_j[n] <- t
@@ -196,8 +201,10 @@ simulate_user_clickstream <- function(alpha, beta, psi, theta_mu, Sigma_mu, mu) 
         m <- sum(lambda)
       }
     }
-    
-    if(t > T) return(list(timestamp = t_j, event = ad_types[j]))
+    # in some cases n_K becomes greater then a few thousand. 
+    # hence, m tends so go to Inf as s becomes 0.
+    # this breaks the code and so we break at a certain purchase count.
+    if(t > T || n_K >= 10) return(list(timestamp = t_j, event = ad_types[j]))
   }
 }
 
@@ -213,25 +220,29 @@ $j_0$ is set to type "`r ad_types[j_0]`" with $T=$ `r T`.
 ```{r results = 'asis', echo=F}
 xtable(data.frame(time = data$timestamp, event = data$event), caption = "Simulated click stream")
 ```
-## Simulate for multiple users
+## Simulate for multiple users and plot their click streams.
 ```{r}
 sim_cnt <- 5
 ```
 Simulate for `r sim_cnt` users.
 ```{r}
-users <- data.frame()
-for(i in 1:sim_cnt) {
-  j_0 <- sample(length(ad_types) - 1, size = 1, prob = first_click_prob)
-  params <- draw_params()
-  data <- do.call(simulate_user_clickstream, params)
-  users <- users %>% 
-    rbind(data_frame(user = rep.int(i, length(data$event)), 
-                     event = data$event, 
-                     timestamp=data$timestamp))
+sim_data <- function(count) {
+  users <- data.frame()
+  for(i in 1:count) {
+    j_0 <- sample(length(ad_types) - 1, size = 1, prob = first_click_prob)
+    params <- draw_params()
+    data <- do.call(simulate_user_clickstream, params)
+    users <- users %>% 
+      rbind(data_frame(user = rep.int(i, length(data$event)), 
+                       event = data$event, 
+                       timestamp=data$timestamp))
+  }
+  users
 }
 ```
 
 ```{r}
+users <- sim_data(sim_cnt)
 ggplot(users, aes(x = timestamp, y = user, 
                   label = event, color = factor(event), 
                   shape = factor(event),
@@ -240,5 +251,31 @@ ggplot(users, aes(x = timestamp, y = user,
   geom_hline(aes(yintercept = user), lty="dotted") + 
   xlim(0, T) + 
   ylim(1, sim_cnt)
+```
+## Simulate 12,000 users
+```{r}
+data <- sim_data(n)
+```
+```{r}
+data %>% 
+  filter(event != 'purchase') %>%
+  group_by(event) %>% 
+  summarise(n = n()) %>%
+  mutate(ratio = n / sum(n)) 
+```
+Most frequent click combinations ending with a purchase.
+```{r}
+data %>%
+  mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
+                              'search' = 'S', 'display' = 'D')) %>%
+  group_by(user) %>%
+  summarise(stream = paste(event_short, collapse = "")) %>%
+  mutate(stream = stream %>% gsub(x = ., "(P).*","\\1")) %>%
+  filter(stream %>% nchar() > 2, stream %>% endsWith('P')) %>% 
+  group_by(stream) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  head(n=20) %>%
+  knitr::kable(caption = "Most frequent click combinations ending with a purchase")
 ```
 
