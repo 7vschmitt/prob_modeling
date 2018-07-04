@@ -21,7 +21,7 @@ ad_types <- c("search", "display", "other", "purchase")
 K <- length(ad_types)
 alpha_mean <- matrix(c(2.817, 0.0860, 0.5381, 0.6167,
                       0.1614, 1.7818, 0.2055, 0.0845,
-                      0.4647, 0.1270, 8.0526, 0.8384), 
+                      0.4647, 0.1270, 8.0526, 0.8384),
                      nrow = 3, ncol = 4, byrow = T)
 row.names(alpha_mean) <- ad_types[1:3]
 colnames(alpha_mean) <- ad_types
@@ -30,6 +30,8 @@ alpha_sd <- matrix(c(0.1765, 0.0214, 0.0562, 0.0633,
                       0.0496, 0.2314, 0.0572, 0.0347,
                       0.0654, 0.0367, 0.4117, 0.0867), 
                    nrow = 3, ncol = 4, byrow = T)
+row.names(alpha_sd) <- ad_types[1:3]
+colnames(alpha_sd) <- ad_types
 
 beta_mean <- c(34.0188, 46.8854, 51.5114)
 beta_sd <- c(1.7426, 4.9370, 2.3241)
@@ -263,7 +265,7 @@ data %>%
   filter(event != 'purchase') %>%
   group_by(event) %>% 
   summarise(n = n()) %>%
-  mutate(ratio = n / sum(n)) %>%
+  mutate(ratio = n / sum(n)) %>% 
   knitr::kable(caption = "Ad click ratio")
 ```
 
@@ -272,13 +274,53 @@ data %>%
   mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
                               'search' = 'S', 'display' = 'D')) %>%
   group_by(user) %>%
-  summarise(stream = paste(event_short, collapse = "")) %>%
-  mutate(stream = stream %>% gsub(x = ., "(P).*","\\1")) %>%
+  # concatenate all event abbr. into one string
+  summarise(stream = paste(event_short, collapse = "")) %>% 
+  # only include streams until first P
+  mutate(stream = stream %>% gsub(x = ., "(P).*","\\1")) %>% 
+  # only display click streams with more than 2 events ending with a purchase
   filter(stream %>% nchar() > 2, stream %>% endsWith('P')) %>% 
   group_by(stream) %>%
+  # count distinct click patterns
   summarise(n = n()) %>%
   arrange(desc(n)) %>%
   head(n=20) %>%
   knitr::kable(caption = "Most frequent click combinations ending with a purchase")
+```
+```{r}
+data %>%
+  mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
+                              'search' = 'S', 'display' = 'D')) %>%
+  group_by(user) %>%
+  # concatenate all event abbr. into one string
+  summarise(stream = paste(event_short, collapse = "")) %>% 
+  mutate(ev_cnt = stream %>% nchar()) %>%
+  # cut streams longer than 25 chars
+  mutate(stream = ifelse(stream %>% nchar() > 25, 
+                         stream %>% strtrim(25) %>% paste("...", sep = ""), stream)) %>%
+  group_by(stream) %>%
+  #summarise(n = nchar()) %>%
+  arrange(desc(ev_cnt)) %>%
+  head(n=20) %>%
+  knitr::kable(caption = "Longest click streams")
+```
+```{r}
+all_comb <- expand.grid(user = data$user %>% unique, event = ad_types)
+event_counts <- data %>%
+  group_by(user, event) %>%
+  summarise(n = n()) %>% 
+  # join all combinations to get zero count for non-present events
+  left_join(all_comb, ., by = c('user', 'event')) %>%
+  mutate_if(is.integer, funs(replace(., is.na(.), 0)))
+rm(all_comb)
+event_counts %>%
+  ggplot(aes(y = n, x = event)) +
+  geom_boxplot() + 
+  ylim(c(0, 5))
+```
+```{r}
+event_counts %>%
+  ggplot(aes(y = n, x = event)) +
+  geom_boxplot()
 ```
 
