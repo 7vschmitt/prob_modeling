@@ -5,12 +5,13 @@ output: pdf_document
 
 ```{r echo=FALSE}
 suppressMessages(library(MASS))
-suppressMessages(library(dplyr))
+suppressMessages(library(tidyverse))
 suppressMessages(library(xtable))
 suppressMessages(library(MCMCpack))
 options(xtable.comment = FALSE)
-suppressMessages(library(ggplot2))
 knitr::opts_chunk$set(cache = T)
+
+source("./jags_utils.R")
 ```
 
 
@@ -57,7 +58,7 @@ colnames(Sigma_mu_mean) <- ad_types
   
 n <- 12000
 #inv_df <- n - 1
-inv_df <- 7
+inv_df <- 6
 psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
 psi_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
 names(psi_mean) <- ad_types
@@ -232,14 +233,18 @@ Simulate for `r sim_cnt` users.
 ```{r}
 sim_data <- function(count) {
   users <- data.frame()
-  for(i in 1:count) {
+  cnt <- 0
+  while(cnt < count) {
     j_0 <- sample(length(ad_types) - 1, size = 1, prob = first_click_prob)
     params <- draw_params()
     data <- do.call(simulate_user_clickstream, params)
-    users <- users %>% 
-      rbind(data_frame(user = rep.int(i, length(data$event)), 
-                       event = data$event, 
-                       timestamp=data$timestamp))
+    if(!is_empty(data$event)) {
+      cnt <- cnt + 1
+      users <- users %>% 
+        rbind(data_frame(user = rep.int(cnt, length(data$event)), 
+                         event = data$event, 
+                         timestamp=data$timestamp))
+    }
   }
   users
 }
@@ -322,5 +327,82 @@ event_counts %>%
 event_counts %>%
   ggplot(aes(y = n, x = event)) +
   geom_boxplot()
+```
+# Parameter estimation
+## MCMC Model
+```{r}
+modelStr <- "
+  # N(t)
+  
+
+  # lambda
+  for(i in 1:nSubj){
+    lambda[i] <- 
+  }
+
+  # alpha
+  for(j in 1:K-1) {
+    for(k in 1:K) {
+      alpha[j, k] ~ dgamma(0.5, 0.5)
+    }
+  }
+  
+  # beta
+  for(j in 1:K-1) {
+    beta[j] ~ dgamma(0.5, 0.5)
+  }
+
+  # psi
+  psi ~ dmnorm(0, 10^4 * identMat)
+
+  # mu
+  for(i in 1:nSubj){
+    mu[i] ~ exp(dmnorm(theta_mu, Sigma_mu))
+  }
+
+  # theta_mu
+  theta_mu ~ dmnorm(0, 10^6 * identMat)
+  # for ( varIdx in 1:K ) { theta_mu[varIdx] ~ dnorm( 0 , 10^6 ) }  # alternative
+  
+  # Sigma_mu
+  Sigma_mu ~ dwish(scaleMat)
+
+"
+```
+## Run JAGS
+```{r}
+writeLines( modelString , con="TEMPmodel.txt" )
+
+
+dataList = list(    # Put the information into a list.
+  userCounts = data %>% 
+    select(user, event) %>% 
+    mutate(count = as.integer(1)) %>% 
+    group_by(user, event) %>% 
+    summarise(count = sum(count)) %>% 
+    spread(key = event, value = count, fill = as.integer(0)),
+  identMat = diag(1, K),
+  scaleMat = diag(1, K),
+  nSubj = data$user %>% unique %>% length
+)
+# Initialize the chains based on MLE of data.
+# Option: Use single initial value for all chains:
+#  thetaInit = sum(y)/length(y)
+#  initsList = list( theta=thetaInit )
+# Option: Use function that generates random values for each chain:
+initsList = function() {
+  resampledY = sample( y , replace=TRUE )
+  thetaInit = sum(resampledY)/length(resampledY)
+  thetaInit = 0.001+0.998*thetaInit # keep away from 0,1
+  return( list( theta=thetaInit ) )
+}
+
+# Run the chains:
+jagsModel = jags.model( file="TEMPmodel.txt" , data=dataList , inits=initsList , 
+                        n.chains=3 , n.adapt=500 )
+update( jagsModel , n.iter=500 )
+codaSamples = coda.samples( jagsModel , variable.names=c("theta") ,
+                            n.iter=3334 )
+save( codaSamples , file=paste0(fileNameRoot,"Mcmc.Rdata") )
 ```
 
