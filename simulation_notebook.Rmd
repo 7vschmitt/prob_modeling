@@ -332,12 +332,15 @@ event_counts %>%
 ## MCMC Model
 ```{r}
 modelStr <- "
-  # N(t)
-  
-
+data {
+  C <- 10000 # constant for keeping scaled lambda < 1
+}
+model {
   # lambda
   for(i in 1:nSubj){
-    lambda[i] <- 
+    ones[i] <- 1
+    lambda[i] <- ()/C
+    ones[i] ~ dbern(lambda[i]) # use bernulli ones trick (Kruschke, 2015, p. 214)
   }
 
   # alpha
@@ -365,8 +368,9 @@ modelStr <- "
   # for ( varIdx in 1:K ) { theta_mu[varIdx] ~ dnorm( 0 , 10^6 ) }  # alternative
   
   # Sigma_mu
-  Sigma_mu ~ dwish(scaleMat)
-
+  Sigma_mu_inv ~ dwish(scaleMat)
+  Sigma_mu <- inverse(Sigma_mu_inv)
+}
 "
 ```
 ## Run JAGS
