@@ -209,7 +209,9 @@ simulate_user_clickstream <- function(alpha, beta, psi, theta_mu, Sigma_mu, mu) 
     # in some cases n_K becomes greater then a few thousand. 
     # hence, m tends so go to Inf as s becomes 0.
     # this breaks the code and so we break at a certain purchase count.
-    if(t > T || n_K >= 10) return(list(timestamp = t_j, event = ad_types[j]))
+    if(n > 2 && n > 2 * t_j[n]) return(list())
+    #if(t > T || n_K >= 10) return(list(timestamp = t_j, event = ad_types[j]))
+    if(t > T) return(list(timestamp = t_j, event = ad_types[j]))
   }
 }
 
@@ -409,4 +411,3 @@ codaSamples = coda.samples( jagsModel , variable.names=c("theta") ,
                             n.iter=3334 )
 save( codaSamples , file=paste0(fileNameRoot,"Mcmc.Rdata") )
 ```
-
