@@ -330,6 +330,18 @@ event_counts %>%
   ggplot(aes(y = n, x = event)) +
   geom_boxplot()
 ```
+
+## Bring data into correct format
+```{r}
+data_new <- data %>% group_by(user) %>% mutate(count_search=ave(event == "search", FUN=cumsum))
+
+data_new <- data_new %>% group_by(user) %>% mutate(count_display=ave(event == "display", FUN=cumsum))
+
+data_new <- data_new %>% group_by(user) %>% mutate(count_other=ave(event == "other", FUN=cumsum))
+
+data_new <- data_new %>% group_by(user) %>% mutate(count_purchase=ave(event == "purchase", FUN=cumsum))
+```
+
 # Parameter estimation
 ## MCMC Model
 ```{r}
