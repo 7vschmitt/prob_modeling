@@ -11,7 +11,6 @@ suppressMessages(library(MCMCpack))
 options(xtable.comment = FALSE)
 knitr::opts_chunk$set(cache = T)
 
-source("./jags_utils.R")
 ```
 
 
