@@ -4,10 +4,16 @@ output: pdf_document
 ---
 
 ```{r echo=FALSE}
+want = c("MASS", "mvtnorm", "tidyverse", "xtable", "MCMCpack", "doParallel")
+have = want %in% rownames(installed.packages())
+if ( any(!have) ) { install.packages( want[!have] ) }
+
 suppressMessages(library(MASS))
 suppressMessages(library(tidyverse))
 suppressMessages(library(xtable))
 suppressMessages(library(MCMCpack))
+suppressMessages(library(mvtnorm))
+suppressMessages(library(doParallel))
 options(xtable.comment = FALSE)
 knitr::opts_chunk$set(cache = T)
 
@@ -342,7 +348,7 @@ data_new <- data_new %>% group_by(user) %>% mutate(purchase=ave(event == "purcha
 
 data_new <- data_new %>% ungroup %>% as.data.frame
 
-total_counts <- users %>% group_by(user, event) %>% mutate(total_counts = n()) %>% select(user, event, total_counts) %>% distinct %>% ungroup
+total_counts <- data %>% group_by(user, event) %>% mutate(total_counts = n()) %>% select(user, event, total_counts) %>% distinct %>% ungroup
 
 library(tidyr)
 total_counts <- total_counts %>% spread(event, total_counts) # bring to wide format
