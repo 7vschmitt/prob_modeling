@@ -361,18 +361,18 @@ i <- 9 # user
 k <- 2 # display
 l <- 2 # zweiter Klick auf display
 j <- 1 # search
-m <- 2 # zweiter Klick auf search während schon 2 mal auf display geklickt wurde
+m <- 2 # zweiter Klick auf search w?hrend schon 2 mal auf display geklickt wurde
 ```
 
 Likelihood function
 ```{r}
 likelihood <- function(i){
-  prod_k <- numeric(1) # wird später mit ergebnis aus k-loop multipliziert
+  prod_k <- numeric(1) # wird sp?ter mit ergebnis aus k-loop multipliziert
 for (k in 1:length(ad_types)){
-  prod_l <- numeric(1) # wird später mit ergebnis aus l-loop multipliziert
+  prod_l <- numeric(1) # wird sp?ter mit ergebnis aus l-loop multipliziert
   for (l in 1:(total_counts[i , k])){ 
-  first_line <- mu[i,k] # i und k ggf. tauschen, je nach sampling output
-  * exp(psi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
+  first_line <- mu[i,k] * # i und k ggf. tauschen, je nach sampling output
+    exp(psi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
   sum_j <- numeric(0)
   for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
       sum_index <- data_new %>% filter(user == i & event == k) %>%   filter(row_number() ==l) %>% select(j+3) %>% as.numeric()
@@ -386,10 +386,10 @@ for (k in 1:length(ad_types)){
       sum_j <- sum_j + sum_m # Summe j
       } # j Ende
   first_two_lines <- first_line + sum_j # erste und zweite Zeile
-  prod_l <- prod_l * first_two_lines # Produkt über l
+  prod_l <- prod_l * first_two_lines # Produkt ?ber l
     } # l Ende; loop over total counts
   sum_m <- numeric(0)
-    for (m in 0:total_counts[i,5]){ # 0 bis Anzahl Käufe in 120 Tagen
+    for (m in 0:total_counts[i,5]){ # 0 bis Anzahl K?ufe in 120 Tagen
       t_m1 <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m+1) 
       t_m <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m) 
       tmp_m <- exp(psi[k]*m)*(t_m1 - t_m)
@@ -408,8 +408,7 @@ for (k in 1:length(ad_types)){
   } # j Ende
   exponent <- exponent_teil1 - exponent_teil2
     third_fourth_line <- exp(exponent) 
-  prod_k <- (prod_l * third_fourth_line) # Prdoukt aus Zeil 1+2 und Zeile 3-4
-  * prod_k 
+  prod_k <- (prod_l * third_fourth_line) * prod_k # Prdoukt aus Zeil 1+2 und Zeile 3-4  
 }  # loop over all ad types
 } # Funktion Ende
 ```
