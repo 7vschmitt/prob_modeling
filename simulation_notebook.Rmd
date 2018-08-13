@@ -367,53 +367,56 @@ m <- 2 # zweiter Klick auf search w?hrend schon 2 mal auf display geklickt wurde
 Likelihood function
 ```{r}
 likelihood <- function(i, params){
-  alpha <- params$alpha
-  beta <- params$beta
-  psi <- params$psi
-  mu <- params$mu
+  llAplha <- params$alpha
+  llBeta <- params$beta
+  llPsi <- params$psi
+  llMu <- params$mu
   prod_k <- numeric(1) # wird sp?ter mit ergebnis aus k-loop multipliziert
-for (k in 1:length(ad_types)){
-  prod_l <- numeric(1) # wird sp?ter mit ergebnis aus l-loop multipliziert
-  for (l in 1:(total_counts[i , k])){ 
-  first_line <- mu[i,k] * # i und k ggf. tauschen, je nach sampling output
-    exp(psi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
-  sum_j <- numeric(0)
-  for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
-      sum_index <- data_new %>% filter(user == i & event == k) %>%   filter(row_number() ==l) %>% select(j+3) %>% as.numeric()
-      sum_m <- numeric(0)
-      for (m in 1:sum_index){ # zweite Zeile zweite Summe
-        t_l <- data_new %>% filter(user ==i & event==k) %>% filter(row_number() == l) %>% select(timestamp)
-        t_m <- data_new %>% filter(user ==i & event==j) %>% filter(row_number() == m) %>% select(timestamp)
-        tmp_m <- alpha[j,k] * exp(-beta[j] * (t_l - t_m)) # zweite Zeile
-        sum_m <- tmp_m + sum_m
-        } # m Ende
-      sum_j <- sum_j + sum_m # Summe j
-      } # j Ende
-  first_two_lines <- first_line + sum_j # erste und zweite Zeile
-  prod_l <- prod_l * first_two_lines # Produkt ?ber l
-    } # l Ende; loop over total counts
-  sum_m <- numeric(0)
-    for (m in 0:total_counts[i,5]){ # 0 bis Anzahl K?ufe in 120 Tagen
-      t_m1 <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m+1) 
-      t_m <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m) 
-      tmp_m <- exp(psi[k]*m)*(t_m1 - t_m)
-      sum_m <- sum_m + tmp_m # Summe m
-    } # m Ende
-  exponent_teil1 <- sum_m * mu[i,k]
-  exponent_teil2 <- numeric(0)
-  for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
+  for (k in 1:length(ad_types)){
+    prod_l <- numeric(1) # wird sp?ter mit ergebnis aus l-loop multipliziert
+    for (l in 1:(total_counts[i , k])){ 
+    first_line <- llMu[i,k] * # i und k ggf. tauschen, je nach sampling output
+      exp(llPsi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
+    sum_j <- numeric(0)
+    for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
+        sum_index <- data_new %>% filter(user == i & event == k) %>% 
+          filter(row_number() ==l) %>% select(j+3) %>% as.numeric()
+        sum_m <- numeric(0)
+        for (m in 1:sum_index){ # zweite Zeile zweite Summe
+          t_l <- data_new %>% filter(user ==i & event==k) %>% 
+            filter(row_number() == l) %>% select(timestamp)
+          t_m <- data_new %>% filter(user ==i & event==j) %>% 
+            filter(row_number() == m) %>% select(timestamp)
+          tmp_m <- llAplha[j,k] * exp(-llBeta[j] * (t_l - t_m)) # zweite Zeile
+          sum_m <- tmp_m + sum_m
+          } # m Ende
+        sum_j <- sum_j + sum_m # Summe j
+        } # j Ende
+    first_two_lines <- first_line + sum_j # erste und zweite Zeile
+    prod_l <- prod_l * first_two_lines # Produkt ?ber l
+      } # l Ende; loop over total counts
     sum_m <- numeric(0)
-    for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
-      t_m <- data_new %>% filter(event == j) %>% filter(row_number() == m) %>% select(timestamp) %>% as.numeric()
-      tmp_m <- (alpha[j,k]/beta[j]) * (1-exp(-beta[j] * (120 - t_m)))
-      sum_m <- sum_m + tmp_m # Summe m
-    } # m Ende
-    exponent_teil2 <- exponent_teil2 + sum_m
-  } # j Ende
-  exponent <- exponent_teil1 - exponent_teil2
-    third_fourth_line <- exp(exponent) 
-  prod_k <- (prod_l * third_fourth_line) * prod_k # Prdoukt aus Zeil 1+2 und Zeile 3-4  
-}  # loop over all ad types
+      for (m in 0:total_counts[i,5]){ # 0 bis Anzahl K?ufe in 120 Tagen
+        t_m1 <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m+1) 
+        t_m <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m) 
+        tmp_m <- exp(llPsi[k]*m)*(t_m1 - t_m)
+        sum_m <- sum_m + tmp_m # Summe m
+      } # m Ende
+    exponent_teil1 <- sum_m * llMu[i,k]
+    exponent_teil2 <- numeric(0)
+    for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
+      sum_m <- numeric(0)
+      for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
+        t_m <- data_new %>% filter(event == j) %>% filter(row_number() == m) %>% select(timestamp) %>% as.numeric()
+        tmp_m <- (llAplha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (120 - t_m)))
+        sum_m <- sum_m + tmp_m # Summe m
+      } # m Ende
+      exponent_teil2 <- exponent_teil2 + sum_m
+    } # j Ende
+    exponent <- exponent_teil1 - exponent_teil2
+      third_fourth_line <- exp(exponent) 
+    prod_k <- (prod_l * third_fourth_line) * prod_k # Prdoukt aus Zeil 1+2 und Zeile 3-4  
+  }  # loop over all ad types
 } # Funktion Ende
 ```
 
