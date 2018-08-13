@@ -366,7 +366,11 @@ m <- 2 # zweiter Klick auf search w?hrend schon 2 mal auf display geklickt wurde
 
 Likelihood function
 ```{r}
-likelihood <- function(i){
+likelihood <- function(i, params){
+  alpha <- params$alpha
+  beta <- params$beta
+  psi <- params$psi
+  mu <- params$mu
   prod_k <- numeric(1) # wird sp?ter mit ergebnis aus k-loop multipliziert
 for (k in 1:length(ad_types)){
   prod_l <- numeric(1) # wird sp?ter mit ergebnis aus l-loop multipliziert
