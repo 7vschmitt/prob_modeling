@@ -332,13 +332,86 @@ event_counts %>%
 
 ## Bring data into correct format
 ```{r}
-data_new <- data %>% group_by(user) %>% mutate(count_search=ave(event == "search", FUN=cumsum))
+data_new <- data %>% group_by(user) %>% mutate(search=ave(event == "search", FUN=cumsum))
 
-data_new <- data_new %>% group_by(user) %>% mutate(count_display=ave(event == "display", FUN=cumsum))
+data_new <- data_new %>% group_by(user) %>% mutate(display=ave(event == "display", FUN=cumsum))
 
-data_new <- data_new %>% group_by(user) %>% mutate(count_other=ave(event == "other", FUN=cumsum))
+data_new <- data_new %>% group_by(user) %>% mutate(other=ave(event == "other", FUN=cumsum))
 
-data_new <- data_new %>% group_by(user) %>% mutate(count_purchase=ave(event == "purchase", FUN=cumsum))
+data_new <- data_new %>% group_by(user) %>% mutate(purchase=ave(event == "purchase", FUN=cumsum))
+
+data_new <- data_new %>% ungroup %>% as.data.frame
+
+total_counts <- users %>% group_by(user, event) %>% mutate(total_counts = n()) %>% select(user, event, total_counts) %>% distinct %>% ungroup
+
+library(tidyr)
+total_counts <- total_counts %>% spread(event, total_counts) # bring to wide format
+total_counts[is.na(total_counts)] <- 0
+# reorder columns
+total_counts <- total_counts[, c(1,5,2,3,4)]
+total_counts <- as.data.frame(total_counts)
+data_new$event <- as.factor(data_new$event)
+levels(data_new$event) <- c(2,3,4,1)
+```
+
+
+Testparameter
+```{r}
+i <- 9 # user
+k <- 2 # display
+l <- 2 # zweiter Klick auf display
+j <- 1 # search
+m <- 2 # zweiter Klick auf search während schon 2 mal auf display geklickt wurde
+```
+
+Likelihood function
+```{r}
+likelihood <- function(i){
+  prod_k <- numeric(1) # wird später mit ergebnis aus k-loop multipliziert
+for (k in 1:length(ad_types)){
+  prod_l <- numeric(1) # wird später mit ergebnis aus l-loop multipliziert
+  for (l in 1:(total_counts[i , k])){ 
+  first_line <- mu[i,k] # i und k ggf. tauschen, je nach sampling output
+  * exp(psi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
+  sum_j <- numeric(0)
+  for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
+      sum_index <- data_new %>% filter(user == i & event == k) %>%   filter(row_number() ==l) %>% select(j+3) %>% as.numeric()
+      sum_m <- numeric(0)
+      for (m in 1:sum_index){ # zweite Zeile zweite Summe
+        t_l <- data_new %>% filter(user ==i & event==k) %>% filter(row_number() == l) %>% select(timestamp)
+        t_m <- data_new %>% filter(user ==i & event==j) %>% filter(row_number() == m) %>% select(timestamp)
+        tmp_m <- alpha[j,k] * exp(-beta[j] * (t_l - t_m)) # zweite Zeile
+        sum_m <- tmp_m + sum_m
+        } # m Ende
+      sum_j <- sum_j + sum_m # Summe j
+      } # j Ende
+  first_two_lines <- first_line + sum_j # erste und zweite Zeile
+  prod_l <- prod_l * first_two_lines # Produkt über l
+    } # l Ende; loop over total counts
+  sum_m <- numeric(0)
+    for (m in 0:total_counts[i,5]){ # 0 bis Anzahl Käufe in 120 Tagen
+      t_m1 <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m+1) 
+      t_m <- data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m) 
+      tmp_m <- exp(psi[k]*m)*(t_m1 - t_m)
+      sum_m <- sum_m + tmp_m # Summe m
+    } # m Ende
+  exponent_teil1 <- sum_m * mu[i,k]
+  exponent_teil2 <- numeric(0)
+  for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
+    sum_m <- numeric(0)
+    for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
+      t_m <- data_new %>% filter(event == j) %>% filter(row_number() == m) %>% select(timestamp) %>% as.numeric()
+      tmp_m <- (alpha[j,k]/beta[j]) * (1-exp(-beta[j] * (120 - t_m)))
+      sum_m <- sum_m + tmp_m # Summe m
+    } # m Ende
+    exponent_teil2 <- exponent_teil2 + sum_m
+  } # j Ende
+  exponent <- exponent_teil1 - exponent_teil2
+    third_fourth_line <- exp(exponent) 
+  prod_k <- (prod_l * third_fourth_line) # Prdoukt aus Zeil 1+2 und Zeile 3-4
+  * prod_k 
+}  # loop over all ad types
+} # Funktion Ende
 ```
 
 # Parameter estimation
