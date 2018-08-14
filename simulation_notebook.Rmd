@@ -372,7 +372,7 @@ m <- 2 # zweiter Klick auf search waehrend schon 2 mal auf display geklickt wurd
 
 # Likelihood function
 ```{r}
-likelihood <- function(i, params){
+likelihood <- function(i, params = params){
   llAlpha <- params$alpha
   llBeta <- params$beta
   llPsi <- params$psi
@@ -397,7 +397,7 @@ likelihood <- function(i, params){
         sum_j <- sum_j + sum_m # Summe j
         } # j Ende
     first_two_lines <- first_line + sum_j # erste und zweite Zeile
-    prod_l <- prod_l * first_two_lines # Produkt ueber l
+    prod_l <- ifelse(total_counts[i , k+1] != 0, prod_l * first_two_lines, prod_l * 1) # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
       } # l Ende; loop over total counts
     sum_m <- numeric(0)
       for (m in 0:total_counts[i,5]){ # 0 bis Anzahl Kaeufe in 120 Tagen
@@ -421,8 +421,21 @@ likelihood <- function(i, params){
       third_fourth_line <- exp(exponent) 
     prod_k <- (prod_l * third_fourth_line) * prod_k # Prdoukt aus Zeil 1+2 und Zeile 3-4  
   }  # loop over all ad types
+  return(prod_k)
 } # Funktion Ende
 ```
+
+```{r}
+likelihood(9)
+
+library(doParallel)
+cl <- makeCluster(2)
+registerDoParallel(cl)
+timesystem.time({ foreach(i = 1:12000, .combine = cbind) %dopar% {likelihood(i)} })[3]
+stopCluster(cl)
+```
+
+
 
 # Parameter estimation
 ## MCMC Model
