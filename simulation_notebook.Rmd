@@ -377,32 +377,61 @@ likelihood <- function(i, params = params){
   llBeta <- params$beta
   llPsi <- params$psi
   llMu <- params$mu
-  llMu <- replicate(n, params$mu) # mu vector 12 000 mal wiederholen für Test
+  llMu <- replicate(n, params$mu) # mu vector 12 000 mal wiederholen f?r Test
   prod_k <- numeric(1) # wird spaeter mit ergebnis aus k-loop multipliziert
   for (k in 1:length(ad_types)){
     prod_l <- numeric(1) # wird sp?ter mit ergebnis aus l-loop multipliziert
     for (l in 1:(total_counts[i , k+1])){ 
-    first_line <- llMu[k,i] * # i und k ggf. tauschen, je nach sampling output
-      exp(llPsi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
-    sum_j <- numeric(0)
-    for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
-        sum_index <- ifelse(data_new %>% filter(user == i & event == k) %>% nrow() ==0 ,0, data_new %>% filter(user == i & event == k) %>% filter(row_number() ==l) %>% select(j+3) %>% as.numeric())
-        sum_m <- numeric(0)
-        for (m in 1:sum_index){ # zweite Zeile zweite Summe
-          t_l <- ifelse(total_counts[i , k+1] != 0, data_new %>% filter(user ==i & event==k) %>% filter(row_number() == l) %>% select(timestamp) %>% as.numeric(), 0)
-          t_m <- ifelse(sum_index != 0, data_new %>% filter(user ==i & event==j) %>% filter(row_number() == m) %>% select(timestamp) %>% as.numeric(), 0)
-          tmp_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m)) # zweite Zeile
-          sum_m <- tmp_m + sum_m
-          } # m Ende
-        sum_j <- sum_j + sum_m # Summe j
-        } # j Ende
-    first_two_lines <- first_line + sum_j # erste und zweite Zeile
-    prod_l <- ifelse(total_counts[i , k+1] != 0, prod_l * first_two_lines, prod_l * 1) # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
+      first_line <- llMu[k,i] * # i und k ggf. tauschen, je nach sampling output
+        exp(llPsi[k] * data_new$purchase[data_new[i,(k+3)] == l]) # erste Zeile
+      
+      sum_j <- numeric(0)
+      for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
+          sum_index <- ifelse(data_new %>% 
+                                filter(user == i & event == k) %>% 
+                                nrow() == 0, #if is empty
+                              0, #then
+                              data_new %>% #else
+                                filter(user == i & event == k) %>% 
+                                filter(row_number() ==l) %>% 
+                                select(j+3) %>% as.numeric()
+                              )
+          sum_m <- numeric(0)
+          for (m in 1:sum_index){ # zweite Zeile zweite Summe
+            t_l <- ifelse(total_counts[i , k+1] != 0, # if
+                          data_new %>% # then
+                            filter(user ==i & event==k) %>% 
+                            filter(row_number() == l) %>% 
+                            select(timestamp) %>% as.numeric(), 
+                          0) #else
+            t_m <- ifelse(sum_index != 0, # if
+                          data_new %>% filter(user ==i & event==j) %>% # then
+                            filter(row_number() == m) %>% 
+                            select(timestamp) %>% 
+                            as.numeric(), 
+                          0) #else
+            
+            tmp_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m)) # zweite Zeile
+            sum_m <- tmp_m + sum_m
+            } # m Ende
+          sum_j <- sum_j + sum_m # Summe j
+          } # j Ende
+      first_two_lines <- first_line + sum_j # erste und zweite Zeile
+      prod_l <- ifelse(total_counts[i , k+1] != 0, prod_l * first_two_lines, prod_l * 1) # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
       } # l Ende; loop over total counts
     sum_m <- numeric(0)
       for (m in 0:total_counts[i,5]){ # 0 bis Anzahl Kaeufe in 120 Tagen
-        t_m1 <- ifelse(total_counts[i,5] != 0,data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m+1) %>% select(timestamp) %>% as.numeric(), 0)
-        t_m <- ifelse(total_counts[i,5] != 0, data_new %>% filter(user ==i & event == 4) %>% filter(row_number() == m) %>% select(timestamp) %>% as.numeric, 0 ) 
+        t_m1 <- ifelse(total_counts[i,5] != 0,
+                       data_new %>% filter(user ==i & event == 4) %>% 
+                         filter(row_number() == m+1) %>% 
+                         select(timestamp) %>% 
+                         as.numeric(), 
+                       0)
+        t_m <- ifelse(total_counts[i,5] != 0, 
+                      data_new %>% filter(user ==i & event == 4) %>% 
+                        filter(row_number() == m) %>% 
+                        select(timestamp) %>% as.numeric, 
+                      0) 
         tmp_m <- exp(llPsi[k]*m)*(t_m1 - t_m)
         sum_m <- sum_m + tmp_m # Summe m
       } # m Ende
@@ -411,7 +440,9 @@ likelihood <- function(i, params = params){
     for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
       sum_m <- numeric(0)
       for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
-        t_m <- data_new %>% filter(event == j) %>% filter(row_number() == m) %>% select(timestamp) %>% as.numeric()
+        t_m <- data_new %>% filter(event == j) %>% 
+          filter(row_number() == m) %>% 
+          select(timestamp) %>% as.numeric()
         tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (120 - t_m)))
         sum_m <- sum_m + as.numeric(tmp_m) # Summe m
       } # m Ende
