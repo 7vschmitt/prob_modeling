@@ -23,30 +23,38 @@ likelihood = function( theta , data ) {
 }
 
 # Define the prior density function. 
-prior <- function(params) {
-  pAlpha <- foreach(i=iter(params$alpha), .combine = rbind) %dopar% {
-    dgamma(i, .5, .5) 
-  } %>% matrix(nrow=nrow(params$alpha))
-  pBeta <- foreach(i=iter(params$beta), .combine = c) %dopar% dgamma(i, .5, .5)
-  pPsi <- dmvnorm(params$psi, 
-                  mean = rep(0, length(params$psi)), 
-                  sigma = 10^4 * diag(nrow = length(params$psi)))
-  
-  pMu <- foreach(i=iter(params$mu, by = 'row'), .combine = rbind) %dopar% 
-    exp(dmvnorm(i, mean = params$theta_mu, sigma = params$Sigma_mu))
-  pThetaMu <- dmvnorm(params$theta_mu, 
-                      mean = rep(0, length(params$theta_mu)), 
-                      sigma = 10^6 * diag(nrow = length(params$theta_mu)))
-  pSigmaMu <- diwish(params$Sigma_mu, S = diag(nrow = K), v = K)
-  return(list(alpha= pAlpha, beta=pBeta, psi=pPsi))
+prior <- function(alpha = NULL, beta = NULL, psi = NULL, mu = NULL, theta_mu = NULL, Sigma_mu = NULL) {
+  result <- list()
+  if(!is.null(alpha)) {
+    result$alpha <- foreach(i=iter(params$alpha), .combine = rbind) %dopar% { 
+      dgamma(i, .5, .5) } %>% matrix(nrow=nrow(params$alpha))
+  }
+  if(!is.null(beta)) {
+    result$beta <- foreach(i=iter(params$beta), .combine = c) %dopar% dgamma(i, .5, .5)
+  }
+  if(!is.null(psi)) {
+    result$psi <- dmvnorm(params$psi, 
+                    mean = rep(0, length(params$psi)), 
+                    sigma = 10^4 * diag(nrow = length(params$psi)))
+  }
+  if(!is.null(mu)) {
+    result$mu <- foreach(i=iter(params$mu, by = 'row'), .combine = rbind) %dopar% 
+      exp(dmvnorm(i, mean = params$theta_mu, sigma = params$Sigma_mu))
+  }
+  if(!is.null(theta_mu)) {
+    result$theta_mu <- dmvnorm(params$theta_mu, 
+                        mean = rep(0, length(params$theta_mu)), 
+                        sigma = 10^6 * diag(nrow = length(params$theta_mu)))
+  }
+  if(!is.null(Sigma_mu)) {
+    result$Sigma_mu <- diwish(params$Sigma_mu, S = diag(nrow = K), v = K)
+  }
+  return(result)
 }
 
-# Define the relative probability of the target distribution, 
-# as a function of vector theta. For our application, this
-# target distribution is the unnormalized posterior distribution.
-targetRelProb <- function(users, params) {
-  targetRelProb <- foreach(i = iter(users)) %dopar% {likelihood(i, params)} * prior(params)
-  return(targetRelProb)
+calc_likelihoods <- function(users, params) {
+  ll <- foreach(i = iter(users), .combine = rbind) %dopar% likelihood(i, params)
+  ll
 }
 
 # Specify the length of the trajectory, i.e., the number of jumps to try:
@@ -84,8 +92,15 @@ proposedParams <- function(current_params, ...) {
 }
 
 for ( t in 1:(trajLength-1) ) {
+  # initialize current position
   currentPosition <- trajectory[t]
   newPosition <- currentPosition
+  # calc likelihoods
+  current_lls <- foreach(i = 1:user_cnt, .combine = rbind) %dopar% likelihood(i, currentPosition)
+  sum_ll <- sum(current_lls)
+  # calc priors
+  priors <- do.call(prior, currentPosition)
+  # draw alpha
   varAlpha <- 0.5 # Improvement: Adapt to have acceptance b/w 0.1 & 0.4
   alphaStar <- exp(foreach(a=iter(params$alpha), .combine = rbind) %dopar% {
     rnorm(1, mean = log(a), varAlpha) 
@@ -93,8 +108,9 @@ for ( t in 1:(trajLength-1) ) {
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
   alphaStarAccept <- min(1, 
-                         targetRelProb(proposedAlpha, 1:user_cnt) * prod(alphaStar) / 
-                           targetRelProb(currentPosition, 1:user_cnt) * prod(currentPosition$alpha))
+                         sum(calc_likelihoods(1:user_cnt, proposedAlpha)) * prior(alpha = alphaStar) * prod(alphaStar) / 
+                           sum_ll * priors$alpha * prod(currentPosition$alpha)
+                         )
   # Generate a random uniform value from the interval [0,1] to
   # decide whether or not to accept the proposed jump.
   if (runif(1) < alphaStarAccept) {
