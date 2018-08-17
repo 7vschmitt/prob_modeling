@@ -77,8 +77,13 @@ trajectory[[1]] <- initals
 # Specify the burn-in period:
 burnIn = ceiling( 0.2 * trajLength ) # arbitrary number, less than trajLength
 # Initialize accepted, rejected counters, just to monitor performance:
-nAlphaAccepted = 0
-nAlphaRejected = 0
+nAlphaAccepted <- 0
+nAlphaRejected <- 0
+nBetaAccepted <- 0
+nBetaRejected <- 0
+nPsiAccepted <- 0
+nPsiRejected <- 0
+
 
 # Now generate the random walk. The 't' index is time or trial in the walk.
 # Specify seed to reproduce same random walk:
@@ -97,21 +102,25 @@ for ( t in 1:(trajLength-1) ) {
   currentPosition <- trajectory[t]
   newPosition <- currentPosition
   # calc likelihoods
-  current_lls <- foreach(i = 1:user_cnt, .combine = rbind) %dopar% likelihood(i, currentPosition)
+  current_lls <- foreach(i = 1:user_cnt, .combine = rbind) %dopar% {
+    likelihood(i, currentPosition)
+  }
   sum_ll <- prod(current_lls)
   # calc priors
   priors <- do.call(prior, currentPosition)
-  # draw alpha
+  
+  #### draw alpha
   varAlpha <- 0.5 # Improvement: Adapt to have acceptance b/w 0.1 & 0.4
-  alphaStar <- exp(foreach(a=iter(params$alpha), .combine = rbind) %dopar% {
+  alphaStar <- exp(foreach(a=iter(currentPosition$alpha), .combine = rbind) %dopar% {
     rnorm(1, mean = log(a), varAlpha) 
-  } %>% matrix(nrow=nrow(params$alpha)))
+  } %>% matrix(nrow=nrow(currentPosition$alpha)))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
   alphaStarAccept <- min(1, 
-                         sum(calc_likelihoods(1:user_cnt, proposedAlpha)) * prior(alpha = alphaStar) * prod(alphaStar) / 
-                           sum_ll * priors$alpha * prod(currentPosition$alpha)
-                         )
+                         sum(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
+                           prior(alpha = alphaStar) * prod(alphaStar) / 
+                           sum_ll * priors$alpha * prod(currentPosition$alpha))
+  
   # Generate a random uniform value from the interval [0,1] to
   # decide whether or not to accept the proposed jump.
   if (runif(1) < alphaStarAccept) {
@@ -124,7 +133,50 @@ for ( t in 1:(trajLength-1) ) {
     if ( t > burnIn ) { nAlphaRejected <- nAlphaRejected + 1 }
   }
   
-  # finally set new trajectory
+  #### draw beta
+  varBeta <- 0.5
+  betaStar <- exp(foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
+    rnorm(1, mean = log(a), varBeta) 
+  })
+  proposedBeta <- proposedParams(currentPosition, beta=betaStar)
+  betaStarAccept <- min(1, 
+                         sum(calc_likelihoods(1:user_cnt, proposedBeta)) * 
+                           prior(beta = betaStar) * prod(betaStar) / 
+                           sum_ll * priors$beta * prod(currentPosition$beta))
+  
+  if (runif(1) < betaStarAccept) {
+    # accept the proposed jump
+    newPosition <- proposedParams(newPosition, beta=betaStar)
+    # increment the accepted counter, just to monitor performance
+    if ( t > burnIn ) { nBetaAccepted <- nBetaAccepted + 1 }
+  } else {
+    # increment the rejected counter, just to monitor performance
+    if ( t > burnIn ) { nBetaRejected <- nBetaRejected + 1 }
+  }
+  
+  #### draw psi
+  varPsi <- 0.5
+  psiStar <- foreach(p = iter(currentPosition$psi), .combine = c) %dopar% {
+    rnorm(1, mean = p, sd = varPsi)
+  }
+  proposedPsi <- proposedParams(currentPosition, psi = psiStar)
+  psiStarAccept <- min(1, 
+                       sum(calc_likelihoods(1:user_cnt, proposedPsi)) * 
+                         prior(psi = psiStar) / 
+                         sum_ll * priors$psi)
+  
+  if (runif(1) < psiStarAccept) {
+    # accept the proposed jump
+    newPosition <- proposedParams(newPosition, psi=psiStar)
+    # increment the accepted counter, just to monitor performance
+    if ( t > burnIn ) { nPsiAccepted <- nPsiAccepted + 1 }
+  } else {
+    # increment the rejected counter, just to monitor performance
+    if ( t > burnIn ) { nPsiRejected <- nPsiRejected + 1 }
+  }
+  
+  
+  #### finally set new trajectory
   trajectory[ t+1 ] <- newPosition
 }
 
