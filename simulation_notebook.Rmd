@@ -6,14 +6,11 @@ output: pdf_document
 ```{r echo=FALSE}
 want = c("MASS", "mvtnorm", "tidyverse", "xtable", "MCMCpack", "doParallel")
 have = want %in% rownames(installed.packages())
-if ( any(!have) ) { install.packages( want[!have] ) }
+if ( any(!have) ) { install.packages(want[!have], quiet = TRUE, verbose = FALSE) }
 
-suppressMessages(library(MASS))
-suppressMessages(library(tidyverse))
-suppressMessages(library(xtable))
-suppressMessages(library(MCMCpack))
-suppressMessages(library(mvtnorm))
-suppressMessages(library(doParallel))
+for (lib in want) {
+  suppressMessages(require(lib, character.only = TRUE, quietly = TRUE))
+}
 registerDoParallel(cores = detectCores() - 1)
 options(xtable.comment = FALSE)
 knitr::opts_chunk$set(cache = T)
@@ -495,7 +492,7 @@ stopCluster(cl)
 ```
 
 
-# Likelihood überarbeitet
+# Likelihood ?berarbeitet
 
 ```{r}
 likelihood <- function(i, params){
