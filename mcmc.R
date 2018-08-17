@@ -23,31 +23,32 @@ likelihood = function( theta , data ) {
 }
 
 # Define the prior density function. 
-prior <- function(alpha = NULL, beta = NULL, psi = NULL, mu = NULL, theta_mu = NULL, Sigma_mu = NULL) {
+prior <- function(alpha = NULL, beta = NULL, psi = NULL, 
+                  mu = NULL, theta_mu = NULL, Sigma_mu = NULL) {
   result <- list()
   if(!is.null(alpha)) {
-    result$alpha <- foreach(i=iter(params$alpha), .combine = rbind) %dopar% { 
-      dgamma(i, .5, .5) } %>% matrix(nrow=nrow(params$alpha))
+    result$alpha <- foreach(i=iter(alpha), .combine = rbind) %dopar% { 
+      dgamma(i, .5, .5) } %>% matrix(nrow=nrow(alpha))
   }
   if(!is.null(beta)) {
-    result$beta <- foreach(i=iter(params$beta), .combine = c) %dopar% dgamma(i, .5, .5)
+    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, .5, .5)
   }
   if(!is.null(psi)) {
-    result$psi <- dmvnorm(params$psi, 
-                    mean = rep(0, length(params$psi)), 
-                    sigma = 10^4 * diag(nrow = length(params$psi)))
+    result$psi <- dmvnorm(psi, 
+                    mean = rep(0, length(psi)), 
+                    sigma = 10^4 * diag(nrow = length(psi)))
   }
   if(!is.null(mu)) {
-    result$mu <- foreach(i=iter(params$mu, by = 'row'), .combine = rbind) %dopar% 
-      exp(dmvnorm(i, mean = params$theta_mu, sigma = params$Sigma_mu))
+    result$mu <- foreach(i=iter(mu, by = 'row'), .combine = rbind) %dopar% 
+      exp(dmvnorm(i, mean = theta_mu, sigma = Sigma_mu))
   }
   if(!is.null(theta_mu)) {
-    result$theta_mu <- dmvnorm(params$theta_mu, 
-                        mean = rep(0, length(params$theta_mu)), 
-                        sigma = 10^6 * diag(nrow = length(params$theta_mu)))
+    result$theta_mu <- dmvnorm(theta_mu, 
+                        mean = rep(0, length(theta_mu)), 
+                        sigma = 10^6 * diag(nrow = length(theta_mu)))
   }
   if(!is.null(Sigma_mu)) {
-    result$Sigma_mu <- diwish(params$Sigma_mu, S = diag(nrow = K), v = K)
+    result$Sigma_mu <- diwish(Sigma_mu, S = diag(nrow = K), v = K)
   }
   return(result)
 }
@@ -97,7 +98,7 @@ for ( t in 1:(trajLength-1) ) {
   newPosition <- currentPosition
   # calc likelihoods
   current_lls <- foreach(i = 1:user_cnt, .combine = rbind) %dopar% likelihood(i, currentPosition)
-  sum_ll <- sum(current_lls)
+  sum_ll <- prod(current_lls)
   # calc priors
   priors <- do.call(prior, currentPosition)
   # draw alpha
