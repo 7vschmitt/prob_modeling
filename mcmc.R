@@ -202,7 +202,26 @@ for ( t in 1:(trajLength-1) ) {
   }
   
   #### draw theta_mu
+  I <- diag(nrow = nrow(currentPosition$Sigma_mu))
+  Sigma_theta_mu <- 10^6 * I
+  InvSigmaMu <- solve(currentPosition$Sigma_mu)
+  InvSigmaThetaMu <- solve(Sigma_theta_mu)
+  B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
+  A <- t(B) %*% t( t(colSums(currentPosition$mu)) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
   
+  thetaMuStar <- rmvnorm(1, mean = A, sigma = B)
+  newPosition$theta_mu <- thetaMuStar
+  
+  #### draw Sigma_mu
+  S <- solve(
+    foreach(i = 1:nrow(currentPosition$mu), .combine = '+') %dopar% {
+      (log(currentPosition$mu[i, ]) - currentPosition$theta_mu) %*% 
+        t((log(currentPosition$mu[i, ]) - currentPosition$theta_mu))
+    } + diag(K)
+    )
+  v <- 4
+  SigmaMuStar <- riwish(S = S, v = v)
+  newPosition$Sigma_mu <- SigmaMuStar
   
   #### finally set new trajectory
   trajectory[ t+1 ] <- newPosition
