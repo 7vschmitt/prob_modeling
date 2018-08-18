@@ -83,6 +83,8 @@ nBetaAccepted <- 0
 nBetaRejected <- 0
 nPsiAccepted <- 0
 nPsiRejected <- 0
+nMuAccepted <- numeric(length = user_cnt)
+nMuRejected <- numeric(length = user_cnt)
 
 
 # Now generate the random walk. The 't' index is time or trial in the walk.
@@ -125,7 +127,7 @@ for ( t in 1:(trajLength-1) ) {
   # decide whether or not to accept the proposed jump.
   if (runif(1) < alphaStarAccept) {
     # accept the proposed jump
-    newPosition <- proposedParams(newPosition, alpha=alphaStar)
+    newPosition$alpha <- alphaStar
     # increment the accepted counter, just to monitor performance
     if ( t > burnIn ) { nAlphaAccepted <- nAlphaAccepted + 1 }
   } else {
@@ -146,7 +148,7 @@ for ( t in 1:(trajLength-1) ) {
   
   if (runif(1) < betaStarAccept) {
     # accept the proposed jump
-    newPosition <- proposedParams(newPosition, beta=betaStar)
+    newPosition$beta <- betaStar
     # increment the accepted counter, just to monitor performance
     if ( t > burnIn ) { nBetaAccepted <- nBetaAccepted + 1 }
   } else {
@@ -167,13 +169,39 @@ for ( t in 1:(trajLength-1) ) {
   
   if (runif(1) < psiStarAccept) {
     # accept the proposed jump
-    newPosition <- proposedParams(newPosition, psi=psiStar)
+    newPosition$psi <- psiStar
     # increment the accepted counter, just to monitor performance
     if ( t > burnIn ) { nPsiAccepted <- nPsiAccepted + 1 }
   } else {
     # increment the rejected counter, just to monitor performance
     if ( t > burnIn ) { nPsiRejected <- nPsiRejected + 1 }
   }
+  
+  #### draw mu^i
+  varMu <- rep(0.05, K)
+  foreach(i = 1:user_cnt, .combine=rbind) %dopar% {
+    muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = c) %do% {
+      exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = varMu[k]))
+    }
+    propMui <- currentPosition$mu
+    propMui[i] <- muiStar
+    proposedMu <- proposedParams(currentPosition, mu = propMui)
+    
+    muiStarAccept <- min(1, calc_likelihoods(i, proposedMu) * prior(mu = proposedMu) * prod(muiStar) / 
+                           current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,]))
+    
+    if (runif(1) < muiStarAccept) {
+      # accept the proposed jump
+      newPosition$mu[i] <- muiStar
+      # increment the accepted counter, just to monitor performance
+      if ( t > burnIn ) { nMuAccepted[i] <- nMuAccepted[i] + 1 }
+    } else {
+      # increment the rejected counter, just to monitor performance
+      if ( t > burnIn ) { nMuRejected[i] <- nMuRejected[i] + 1 }
+    }
+  }
+  
+  #### draw theta_mu
   
   
   #### finally set new trajectory
