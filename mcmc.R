@@ -166,22 +166,33 @@ initals = list(mu=rep(c(0.05, 0.005, 0.005, 0.001), user_cnt) %>%
 # Now generate the random walk. The 't' index is time or trial in the walk.
 # Specify seed to reproduce same random walk:
 set.seed(1899)
-trajectory <- list()
-# Specify where to start the trajectory:
-trajectory[[1]] <- initals
+trajectory_file <- "mcmc_trajectory"
+if(file.exists(trajectory_file)) {
+  load(trajectory_file)
+} else {
+  trajectory <- list()
+  # Specify where to start the trajectory:
+  trajectory[[1]] <- initals
+}
+startCount <- ifelse(length(trajectory) > 1, length(trajectory) + 1, 1)
 # Specify the burn-in period:
 burnIn = ceiling( 0.0 * trajLength ) # arbitrary number, less than trajLength
 # Initialize accepted, rejected counters, just to monitor performance:
-nAlphaAccepted <- 0
-nAlphaRejected <- 0
-nBetaAccepted <- 0
-nBetaRejected <- 0
-nPsiAccepted <- 0
-nPsiRejected <- 0
-nMuAccepted <- numeric(length = user_cnt)
-nMuRejected <- numeric(length = user_cnt)
+counts_file <- "mcmc_counts"
+if(file.exists(counts_file)) {
+  load(counts_file)
+} else {
+  nAlphaAccepted <- 0
+  nAlphaRejected <- 0
+  nBetaAccepted <- 0
+  nBetaRejected <- 0
+  nPsiAccepted <- 0
+  nPsiRejected <- 0
+  nMuAccepted <- numeric(length = user_cnt)
+  nMuRejected <- numeric(length = user_cnt)
+}
 
-for ( ct in 1:(trajLength-1) ) {
+for ( ct in startCount:(trajLength-1) ) {
   # initialize current position
   currentPosition <- trajectory[[ct]]
   newPosition <- currentPosition
@@ -310,6 +321,20 @@ for ( ct in 1:(trajLength-1) ) {
   
   #### finally set new trajectory
   trajectory[[ct+1]] <- newPosition
+  
+  # save milestones
+  if (ct %% 100 == 0) {
+    paste(Sys.time(), "Reached iteration", ct) %>% print
+    save(trajectory, file = trajectory_file)
+    save(nAlphaAccepted,
+         nAlphaRejected,
+         nBetaAccepted,
+         nBetaRejected,
+         nPsiAccepted,
+         nPsiRejected,
+         nMuAccepted,
+         nMuRejected, file = counts_file)
+  } 
 }
 
 # Extract the post-burnIn portion of the trajectory.
