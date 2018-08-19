@@ -150,16 +150,25 @@ proposedParams <- function(current_params, ...) {
   new_params
 }
 
+adjustVariance <- function(var, nAccept, nReject) {
+  acceptRate <- nAccept / nReject
+  if(acceptRate < 0.1) {
+    var <- var / 10
+  } else if(acceptRate > 0.4) {
+    var <- var * 10
+  }
+  return(var)
+}
 
 # Specify the length of the trajectory, i.e., the number of jumps to try:
-trajLength = 5000 # arbitrary large number
+trajLength = 500 # arbitrary large number
 
 user_cnt = 10
 # Initialize the vector that will store the results:
-initals = list(mu=rep(c(0.05, 0.005, 0.005, 0.001), user_cnt) %>% 
+initals = list(mu=rep(c(0.01, 0.01, 0.01, 0.01), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
                alpha = alpha_mean, 
-               beta = beta_mean, 
+               beta = c(1,1,1), 
                psi = psi_mean,
                Sigma_mu = Sigma_mu_mean,
                theta_mu = theta_mu_mean)
@@ -192,6 +201,11 @@ if(file.exists(counts_file)) {
   nMuRejected <- numeric(length = user_cnt)
 }
 
+varAlpha <- 0.005
+varBeta <- 0.005
+varPsi <- 0.005
+varMu <- rep(0.0001, K)
+paste(Sys.time(), "Start MCMC sampling") %>% print
 for ( ct in startCount:(trajLength-1) ) {
   # initialize current position
   currentPosition <- trajectory[[ct]]
@@ -205,7 +219,8 @@ for ( ct in startCount:(trajLength-1) ) {
   priors <- do.call(prior, currentPosition)
   
   #### draw alpha
-  varAlpha <- 0.005 # Improvement: Adapt to have acceptance b/w 0.1 & 0.4
+  
+  if(ct %% 50 == 0) varAlpha <- adjustVariance(varAlpha, nAlphaAccepted, nAlphaRejected)
   alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
     exp(rnorm(1, mean = log(a), varAlpha))
   } %>% matrix(nrow=nrow(currentPosition$alpha))
@@ -214,7 +229,7 @@ for ( ct in startCount:(trajLength-1) ) {
   alphaStarAccept <- min(1, 
                          sum(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
                            prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar) / 
-                           sum_ll * prod(priors$alpha) * prod(currentPosition$alpha))
+                           sum_ll * prod(priors$alpha) * prod(currentPosition$alpha), na.rm = T)
   
   # Generate a random uniform value from the interval [0,1] to
   # decide whether or not to accept the proposed jump.
@@ -229,7 +244,7 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw beta
-  varBeta <- 0.005
+  if(ct %% 10 == 0) varBeta <- adjustVariance(varBeta, nBetaAccepted, nBetaRejected)
   betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
     exp(rnorm(1, mean = log(b), varBeta))
   }
@@ -237,7 +252,7 @@ for ( ct in startCount:(trajLength-1) ) {
   betaStarAccept <- min(1, 
                          sum(calc_likelihoods(1:user_cnt, proposedBeta)) * 
                            prod(prior(beta = betaStar)$beta) * prod(betaStar) / 
-                           sum_ll * prod(priors$beta) * prod(currentPosition$beta))
+                           sum_ll * prod(priors$beta) * prod(currentPosition$beta), na.rm = T)
   
   if (runif(1) < betaStarAccept) {
     # accept the proposed jump
@@ -250,7 +265,8 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw psi
-  varPsi <- 0.005
+  acceptRate <- nPsiAccepted / nPsiRejected
+  if(ct %% 50 == 0) varPsi <- adjustVariance(varPsi, nPsiAccepted, nPsiRejected)
   psiStar <- foreach(p = iter(currentPosition$psi), .combine = c) %dopar% {
     rnorm(1, mean = p, sd = varPsi)
   }
@@ -258,7 +274,7 @@ for ( ct in startCount:(trajLength-1) ) {
   psiStarAccept <- min(1, 
                        sum(calc_likelihoods(1:user_cnt, proposedPsi)) * 
                          prior(psi = psiStar)$psi / 
-                         sum_ll * priors$psi)
+                         sum_ll * priors$psi, na.rm = T)
   
   if (runif(1) < psiStarAccept) {
     # accept the proposed jump
@@ -271,8 +287,8 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw mu^i
-  varMu <- rep(0.005, K)
-  foreach(i = 1:user_cnt, .combine=rbind) %dopar% {
+  if(ct %% 50 == 0) varMu <- adjustVariance(varMu, sum(nMuAccepted), sum(nMuRejected))
+  foreach(i = 1:user_cnt, .combine=rbind, .export = c("newPosition", "nMuAccepted", "nMuRejected")) %do% {
     muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = cbind) %do% {
       exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = varMu[k]))
     }
@@ -284,11 +300,11 @@ for ( ct in startCount:(trajLength-1) ) {
                            prior(mu = muiStar, 
                                  theta_mu = currentPosition$theta_mu, 
                                  Sigma_mu = currentPosition$Sigma_mu)$mu * prod(muiStar) / 
-                           current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,]))
+                           current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,]), na.rm = T)
     
     if (runif(1) < muiStarAccept) {
       # accept the proposed jump
-      newPosition$mu[i] <- muiStar
+      newPosition$mu[i, ] <- muiStar
       # increment the accepted counter, just to monitor performance
       if ( ct > burnIn ) { nMuAccepted[i] <- nMuAccepted[i] + 1 }
     } else {
