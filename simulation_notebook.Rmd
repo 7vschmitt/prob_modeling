@@ -268,7 +268,14 @@ ggplot(users, aes(x = timestamp, y = user,
 ```
 ## Simulate 12,000 users
 ```{r}
-data <- sim_data(n)
+data_file <- "sim_data"
+if(file.exists(data_file)) {
+  load(data_file) 
+} else {
+  data <- sim_data(n)
+  save(data, file = data_file)
+}
+
 ```
 ```{r}
 data %>% 
