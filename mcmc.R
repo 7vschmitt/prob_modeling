@@ -14,7 +14,7 @@ likelihood <- function(i, params){
       first_two_lines <- numeric()
       for (l in 1:(total_counts[i , k+1])){ 
         first_line <- llMu[k] * exp(llPsi[k] * (data_new %>% 
-                                                  filter(user == i & event == k) %>% 
+                                                  filter(user == i & event == k) %>%
                                                   .[l, ] %>% 
                                                   select(purchase))) %>% 
           as.numeric() # erste Zeile
@@ -31,24 +31,18 @@ likelihood <- function(i, params){
                                 filter(row_number() ==l) %>% 
                                 select(j+3) %>% as.numeric()
           )
-          sum_m <- numeric()
-          for (m in 1:sum_index){ # zweite Zeile zweite Summe
-            t_l <- ifelse(total_counts[i , k+1] != 0, # if
-                          data_new %>% # then
-                            filter(user ==i & event==k) %>% 
-                            filter(row_number() == l) %>% 
-                            select(timestamp) %>% as.numeric(), 
-                          0) #else
-            t_m <- ifelse(sum_index != 0, # if
-                          data_new %>% filter(user ==i & event==j) %>% # then
-                            filter(row_number() == m) %>% 
-                            select(timestamp) %>% 
-                            as.numeric(), 
-                          0) #else
+          if (sum_index > 0){
+            sum_m <- numeric()
+            t_l <- data_new %>% 
+              filter(user ==i & event==k) %>% 
+              filter(row_number() == l) %>% 
+              select(timestamp) %>% as.numeric()
+            t_m <- data_new %>% filter(user ==i & event==j) %>% 
+              select(timestamp) 
+            # second line:
+            sum_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m[1:sum_index,]))
             
-            sum_m[m] <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m)) # zweite Zeile
-            #sum_m <- tmp_m + sum_m
-          } # m Ende
+          } else {sum_m <- 0} 
           sum_j[j] <- sum(sum_m) # Summe j
         } # j Ende
         first_two_lines[l] <- first_line + sum(sum_j) # erste und zweite Zeile
@@ -61,47 +55,51 @@ likelihood <- function(i, params){
     # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
     sum_m <- 0
     purchase_cnt <- total_counts[i,5]
-    for (m in 0:purchase_cnt){ # 0 bis Anzahl Kaeufe in 120 Tagen
-      t_m1 <- ifelse(m == purchase_cnt, 
-                     T, 
-                     ifelse(purchase_cnt != 0,
-                            data_new %>% filter(user ==i & event == K) %>% 
-                              filter(row_number() == m+1) %>% 
-                              select(timestamp) %>% 
-                              as.numeric(), 
-                            0)
-      )
-      t_m <- ifelse(m == 0, 
-                    0,
-                    ifelse(purchase_cnt != 0, 
-                           data_new %>% filter(user ==i & event == K) %>% 
-                             filter(row_number() == m) %>% 
-                             select(timestamp) %>% as.numeric, 
-                           0)
-      )
-      tmp_m <- exp(llPsi[k]*m)*(t_m1 - t_m)
-      sum_m <- sum_m + tmp_m # Summe m
-    } # m Ende
-    exponent_teil1 <- sum_m * llMu[k]
+    if (purchase_cnt > 0){
+      for (m in 0:purchase_cnt){ # 0 bis Anzahl Kaeufe in 120 Tagen
+        t_m1 <- ifelse(m == purchase_cnt, 
+                       T, 
+                       ifelse(purchase_cnt != 0,
+                              data_new %>% filter(user ==i & event == K) %>% 
+                                filter(row_number() == m+1) %>% 
+                                select(timestamp) %>% 
+                                as.numeric(), 
+                              0)
+        )
+        t_m <- ifelse(m == 0, 
+                      0,
+                      ifelse(purchase_cnt != 0, 
+                             data_new %>% filter(user ==i & event == K) %>% 
+                               filter(row_number() == m) %>% 
+                               select(timestamp) %>% as.numeric, 
+                             0)
+        )
+        tmp_m <- exp(llPsi[k]*m)*(t_m1 - t_m)
+        sum_m <- sum_m + tmp_m # Summe m
+      } # m Ende
+      exponent_teil1 <- sum_m * llMu[k]
+    } # if ende
+    else {exponent_teil1 <- 0}
+    browser(expr = is.na(exponent_teil1))
     exponent_teil2 <- 0
     for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
       # j schleife umgehen?
-      sum_m <- 0
+      sum_m <- numeric()
       if (total_counts[i,j+1] > 0) {
-        for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
-          t_m <- data_new %>% filter(event == j) %>% 
-            filter(row_number() == m) %>% 
-            select(timestamp) %>% as.numeric()
-          tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m)))
-          sum_m <- sum_m + as.numeric(tmp_m) # Summe m
-        } # m Ende
+        #for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
+        t_m_neu <- data_new %>% filter(user ==i, event == j) %>% 
+          #filter(row_number() == m) %>% 
+          select(timestamp) # %>% as.numeric()
+        tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
+        sum_m <- sum(tmp_m) # Summe m
+        #} # m Ende
         exponent_teil2 <- exponent_teil2 + sum_m
-      } # j Ende
-      
-    }
+      } 
+    } # j Ende
     exponent <- exponent_teil1 - exponent_teil2
     third_fourth_line <- exp(exponent) 
-    prod_k <- ((prod_l * third_fourth_line) * prod_k) %>% as.numeric()# Prdoukt aus Zeil 1+2 und Zeile 3-4  
+    
+    prod_k <- ((prod_l * third_fourth_line) * prod_k) %>% as.numeric() # Prdoukt aus Zeil 1+2 und Zeile 3-4  
   }  # loop over all ad types
   return(prod_k)
 } # Funktion Ende
@@ -115,7 +113,7 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
       dgamma(i, .5, .5) } %>% matrix(nrow=nrow(alpha))
   }
   if(!is.null(beta)) {
-    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, .5, .5)
+    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, 25, .5)
   }
   if(!is.null(psi)) {
     result$psi <- dmvnorm(psi, 
@@ -168,7 +166,7 @@ user_cnt = 10
 initals = list(mu=rep(c(0.01, 0.01, 0.01, 0.01), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
                alpha = alpha_mean, 
-               beta = c(1,1,1), 
+               beta = beta_mean, 
                psi = psi_mean,
                Sigma_mu = Sigma_mu_mean,
                theta_mu = theta_mu_mean)
@@ -178,12 +176,14 @@ set.seed(1899)
 trajectory_file <- "mcmc_trajectory"
 if(file.exists(trajectory_file)) {
   load(trajectory_file)
+  startCount <- length(trajectory)
+  length(trajectory) <- trajLength
 } else {
   trajectory <- list()
   # Specify where to start the trajectory:
   trajectory[[1]] <- initals
+  startCount <- 1
 }
-startCount <- ifelse(length(trajectory) > 1, length(trajectory) + 1, 1)
 # Specify the burn-in period:
 burnIn = ceiling( 0.0 * trajLength ) # arbitrary number, less than trajLength
 # Initialize accepted, rejected counters, just to monitor performance:
@@ -200,6 +200,11 @@ if(file.exists(counts_file)) {
   nMuAccepted <- numeric(length = user_cnt)
   nMuRejected <- numeric(length = user_cnt)
 }
+
+tailAlphaAcc <- c(0, 0)
+tailBetaAcc <- c(0, 0)
+tailPsiAcc <- c(0, 0)
+tailMuAcc <- c(0, 0)
 
 varAlpha <- 0.005
 varBeta <- 0.005
@@ -220,13 +225,16 @@ for ( ct in startCount:(trajLength-1) ) {
   
   #### draw alpha
   
-  if(ct %% 50 == 0) varAlpha <- adjustVariance(varAlpha, nAlphaAccepted, nAlphaRejected)
+  if(ct %% 50 == 0) {
+    tailAlphaAcc <- c(nAlphaAccepted - tailAlphaAcc[1], nAlphaRejected - tailAlphaAcc[2])
+    varAlpha <- adjustVariance(varAlpha, tailAlphaAcc[1], tailAlphaAcc[2])
+  }
   alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
     exp(rnorm(1, mean = log(a), varAlpha))
   } %>% matrix(nrow=nrow(currentPosition$alpha))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
-  probAlpha <- sum(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
+  probAlpha <- prod(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
     prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar) / 
     sum_ll * prod(priors$alpha) * prod(currentPosition$alpha)
   probAlpha <- ifelse(is.nan(probAlpha),0 , probAlpha)
@@ -245,17 +253,19 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw beta
-  if(ct %% 10 == 0) varBeta <- adjustVariance(varBeta, nBetaAccepted, nBetaRejected)
+  if(ct %% 50 == 0) {
+    tailBetaAcc <- c(nBetaAccepted - tailBetaAcc[1], nBetaRejected - tailBetaAcc[2])
+    varBeta <- adjustVariance(varBeta, tailBetaAcc[1], tailBetaAcc[2])
+  }
   betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
     exp(rnorm(1, mean = log(b), varBeta))
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
-  probBeta <- sum(calc_likelihoods(1:user_cnt, proposedBeta)) * 
+  probBeta <- prod(calc_likelihoods(1:user_cnt, proposedBeta)) * 
     prod(prior(beta = betaStar)$beta) * prod(betaStar) / 
     sum_ll * prod(priors$beta) * prod(currentPosition$beta)
   probBeta <- ifelse(is.nan(probBeta), 0, probBeta)
   betaStarAccept <- min(1, probBeta)
-  
   if (runif(1) < betaStarAccept) {
     # accept the proposed jump
     newPosition$beta <- betaStar
@@ -268,12 +278,15 @@ for ( ct in startCount:(trajLength-1) ) {
   
   #### draw psi
   acceptRate <- nPsiAccepted / nPsiRejected
-  if(ct %% 50 == 0) varPsi <- adjustVariance(varPsi, nPsiAccepted, nPsiRejected)
+  if(ct %% 50 == 0) {
+    tailPsiAcc <- c(nPsiAccepted - tailPsiAcc[1], nPsiRejected - tailPsiAcc[2])
+    varPsi <- adjustVariance(varPsi, tailPsiAcc[1], tailPsiAcc[2])
+  }
   psiStar <- foreach(p = iter(currentPosition$psi), .combine = c) %dopar% {
     rnorm(1, mean = p, sd = varPsi)
   }
   proposedPsi <- proposedParams(currentPosition, psi = psiStar)
-  probPsi <- sum(calc_likelihoods(1:user_cnt, proposedPsi)) * prior(psi = psiStar)$psi / 
+  probPsi <- prod(calc_likelihoods(1:user_cnt, proposedPsi)) * prior(psi = psiStar)$psi / 
     sum_ll * priors$psi
   probPsi <- ifelse(is.nan(probPsi), 0, probPsi)
   psiStarAccept <- min(1, probPsi)
@@ -289,7 +302,10 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw mu^i
-  if(ct %% 50 == 0) varMu <- adjustVariance(varMu, sum(nMuAccepted), sum(nMuRejected))
+  if(ct %% 50 == 0) {
+    tailMuAcc <- c(sum(nMuAccepted) - tailMuAcc[1], sum(nMuRejected) - tailMuAcc[2])
+    varMu <- adjustVariance(varMu, tailMuAcc[1], tailMuAcc[2])
+  }
   foreach(i = 1:user_cnt, .combine=rbind, .export = c("newPosition", "nMuAccepted", "nMuRejected")) %do% {
     muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = cbind) %do% {
       exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = varMu[k]))
@@ -364,39 +380,39 @@ acceptedTraj = trajectory[ (burnIn+1) : length(trajectory) ]
 #-----------------------------------------------------------------------
 # Display the chain.
 
-openGraph(width=4,height=8)
-layout( matrix(1:3,nrow=3) )
-par(mar=c(3,4,2,1),mgp=c(2,0.7,0))
-
-# Posterior histogram:
-paramInfo = plotPost( acceptedTraj$alpha[1,1] , xlim=c(0,1) , xlab=bquote(theta) , 
-                      cex.main=2.0 ,
-                      main=bquote( list( "Prpsl.SD" == .(proposalSD) ,
-                                         "Eff.Sz." == .(round(effectiveSize(acceptedTraj),1)) ) ) )
-
-# Trajectory, a.k.a. trace plot, end of chain:
-idxToPlot = (trajLength-100):trajLength
-plot( trajectory[idxToPlot]$alpha[1,1] , idxToPlot , main="End of Chain" ,
-      xlab=bquote(alpha[1,1]) , xlim=c(0,1) , ylab="Step in Chain" ,
-      type="o" , pch=20 , col="skyblue" , cex.lab=1.5 )
-# Display proposal SD and acceptance ratio in the plot.
-text( 0.0 , trajLength , adj=c(0.0,1.1) , cex=1.75 ,
-      labels = bquote( frac(N[acc],N[pro]) == 
-                         .(signif( nAlphaAccepted/length(acceptedTraj) , 3 ))))
-
-# Trajectory, a.k.a. trace plot, beginning of chain:
-idxToPlot = 1:100
-plot( trajectory[idxToPlot] , idxToPlot , main="Beginning of Chain" ,
-      xlab=bquote(theta) , xlim=c(0,1) , ylab="Step in Chain" ,
-      type="o" , pch=20 , col="skyblue" , cex.lab=1.5 )
-# Indicate burn in limit (might not be visible if not in range):
-if ( burnIn > 0 ) {
-  abline(h=burnIn,lty="dotted")
-  text( 0.5 , burnIn+1 , "Burn In" , adj=c(0.5,1.1) )
-}
-
-#saveGraph( file=paste0( "MCMC" , 
-#                        "SD" , proposalSD ,
-#                        "Init" , trajectory[1] ) , type="eps" )
-
-#------------------------------------------------------------------------
+# openGraph(width=4,height=8)
+# layout( matrix(1:3,nrow=3) )
+# par(mar=c(3,4,2,1),mgp=c(2,0.7,0))
+# 
+# # Posterior histogram:
+# paramInfo = plotPost( acceptedTraj$alpha[1,1] , xlim=c(0,1) , xlab=bquote(theta) , 
+#                       cex.main=2.0 ,
+#                       main=bquote( list( "Prpsl.SD" == .(proposalSD) ,
+#                                          "Eff.Sz." == .(round(effectiveSize(acceptedTraj),1)) ) ) )
+# 
+# # Trajectory, a.k.a. trace plot, end of chain:
+# idxToPlot = (trajLength-100):trajLength
+# plot( trajectory[idxToPlot]$alpha[1,1] , idxToPlot , main="End of Chain" ,
+#       xlab=bquote(alpha[1,1]) , xlim=c(0,1) , ylab="Step in Chain" ,
+#       type="o" , pch=20 , col="skyblue" , cex.lab=1.5 )
+# # Display proposal SD and acceptance ratio in the plot.
+# text( 0.0 , trajLength , adj=c(0.0,1.1) , cex=1.75 ,
+#       labels = bquote( frac(N[acc],N[pro]) == 
+#                          .(signif( nAlphaAccepted/length(acceptedTraj) , 3 ))))
+# 
+# # Trajectory, a.k.a. trace plot, beginning of chain:
+# idxToPlot = 1:100
+# plot( trajectory[idxToPlot] , idxToPlot , main="Beginning of Chain" ,
+#       xlab=bquote(theta) , xlim=c(0,1) , ylab="Step in Chain" ,
+#       type="o" , pch=20 , col="skyblue" , cex.lab=1.5 )
+# # Indicate burn in limit (might not be visible if not in range):
+# if ( burnIn > 0 ) {
+#   abline(h=burnIn,lty="dotted")
+#   text( 0.5 , burnIn+1 , "Burn In" , adj=c(0.5,1.1) )
+# }
+# 
+# #saveGraph( file=paste0( "MCMC" , 
+# #                        "SD" , proposalSD ,
+# #                        "Init" , trajectory[1] ) , type="eps" )
+# 
+# #------------------------------------------------------------------------
