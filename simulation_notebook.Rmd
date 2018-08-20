@@ -355,7 +355,6 @@ data_new <- data_new %>% ungroup %>% as.data.frame
 
 total_counts <- data %>% group_by(user, event) %>% mutate(total_counts = n()) %>% select(user, event, total_counts) %>% distinct %>% ungroup
 
-library(tidyr)
 total_counts <- total_counts %>% spread(event, total_counts) # bring to wide format
 total_counts[is.na(total_counts)] <- 0
 # reorder columns
