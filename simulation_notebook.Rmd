@@ -389,7 +389,7 @@ likelihood <- function(i, params){
       first_two_lines <- numeric()
       for (l in 1:(total_counts[i , k+1])){ 
         first_line <- llMu[k] * exp(llPsi[k] * (data_new %>% 
-                                                  filter(user == i & event == k) %>% 
+                                              filter(user == i & event == k) %>%
                                                   .[l, ] %>% 
                                                   select(purchase))) %>% 
           as.numeric() # erste Zeile
@@ -406,24 +406,18 @@ likelihood <- function(i, params){
                                   filter(row_number() ==l) %>% 
                                   select(j+3) %>% as.numeric()
                                 )
+            if (sum_index > 0){
             sum_m <- numeric()
-            for (m in 1:sum_index){ # zweite Zeile zweite Summe
-              t_l <- ifelse(total_counts[i , k+1] != 0, # if
-                            data_new %>% # then
-                              filter(user ==i & event==k) %>% 
-                              filter(row_number() == l) %>% 
-                              select(timestamp) %>% as.numeric(), 
-                            0) #else
-              t_m <- ifelse(sum_index != 0, # if
-                            data_new %>% filter(user ==i & event==j) %>% # then
-                              filter(row_number() == m) %>% 
-                              select(timestamp) %>% 
-                              as.numeric(), 
-                            0) #else
+            t_l <- data_new %>% 
+              filter(user ==i & event==k) %>% 
+              filter(row_number() == l) %>% 
+              select(timestamp) %>% as.numeric()
+            t_m <- data_new %>% filter(user ==i & event==j) %>% 
+              select(timestamp) 
+            # second line:
+            sum_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m[1:sum_index,]))
               
-              sum_m[m] <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m)) # zweite Zeile
-              #sum_m <- tmp_m + sum_m
-              } # m Ende
+              } else {sum_m <- 0} 
             sum_j[j] <- sum(sum_m) # Summe j
             } # j Ende
         first_two_lines[l] <- first_line + sum(sum_j) # erste und zweite Zeile
@@ -432,10 +426,11 @@ likelihood <- function(i, params){
       first_two_lines <- 1
     }
     prod_l <- prod(first_two_lines)
-   
+    
       # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
     sum_m <- 0
     purchase_cnt <- total_counts[i,5]
+    if (purchase_cnt > 0){
     for (m in 0:purchase_cnt){ # 0 bis Anzahl Kaeufe in 120 Tagen
       t_m1 <- ifelse(m == purchase_cnt, 
                      T, 
@@ -458,6 +453,8 @@ likelihood <- function(i, params){
       sum_m <- sum_m + tmp_m # Summe m
     } # m Ende
     exponent_teil1 <- sum_m * llMu[k]
+    } # if ende
+    else {exponent_teil1 <- 0}
     browser(expr = is.na(exponent_teil1))
     exponent_teil2 <- 0
     for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
@@ -465,19 +462,19 @@ likelihood <- function(i, params){
       sum_m <- 0
       if (total_counts[i,j+1] > 0) {
         for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
-          t_m <- data_new %>% filter(event == j) %>% 
+          t_m_neu <- data_new %>% filter(user ==i, event == j) %>% 
             filter(row_number() == m) %>% 
             select(timestamp) %>% as.numeric()
-          tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m)))
+          tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
           sum_m <- sum_m + as.numeric(tmp_m) # Summe m
         } # m Ende
         exponent_teil2 <- exponent_teil2 + sum_m
-      } # j Ende
-        
-    }
+      } 
+    } # j Ende
     exponent <- exponent_teil1 - exponent_teil2
     third_fourth_line <- exp(exponent) 
-    prod_k <- ((prod_l * third_fourth_line) * prod_k) %>% as.numeric()# Prdoukt aus Zeil 1+2 und Zeile 3-4  
+    
+    prod_k <- ((prod_l * third_fourth_line) * prod_k) %>% as.numeric() # Prdoukt aus Zeil 1+2 und Zeile 3-4  
   }  # loop over all ad types
   return(prod_k)
 } # Funktion Ende
@@ -509,7 +506,7 @@ likelihood <- function(i, params){
   llMu <- params$mu
   prod_k <- 1 # wird spaeter mit ergebnis aus k-loop multipliziert
   for (k in 1:length(ad_types)){
-    prod_l <- 1 # wird sp?ter mit ergebnis aus l-loop multipliziert
+    prod_l <- 1 # wird sp?ter mit ergeb+nis aus l-loop multipliziert
     if (total_counts[i , k+1] != 0){
       first_two_lines <- numeric()
       #for (l in 1:(total_counts[i , k+1])){ 
@@ -518,7 +515,7 @@ likelihood <- function(i, params){
                                                   filter(user == i & event == k) %>% 
                                                   select(purchase))) #%>% 
                                                   #as.numeric() # erste Zeile
-        browser()
+        
         sum_j <- numeric()
         for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
           # j schleife umgehen
