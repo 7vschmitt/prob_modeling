@@ -335,7 +335,7 @@ for ( ct in startCount:(trajLength-1) ) {
   InvSigmaMu <- solve(currentPosition$Sigma_mu)
   InvSigmaThetaMu <- solve(Sigma_theta_mu)
   B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
-  A <- t(B) %*% t( t(colSums(currentPosition$mu)) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
+  A <- t(B) %*% t( t(colSums(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
   
   thetaMuStar <- rmvnorm(1, mean = A, sigma = B) %>% as.numeric()
   newPosition$theta_mu <- thetaMuStar
