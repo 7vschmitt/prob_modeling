@@ -159,7 +159,7 @@ adjustVariance <- function(var, nAccept, nReject) {
 }
 
 # Specify the length of the trajectory, i.e., the number of jumps to try:
-trajLength = 5000 # arbitrary large number
+trajLength = 500 # arbitrary large number
 
 user_cnt = 10
 # Initialize the vector that will store the results:
@@ -234,9 +234,9 @@ for ( ct in startCount:(trajLength-1) ) {
   } %>% matrix(nrow=nrow(currentPosition$alpha))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
-  probAlpha <- prod(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
-    prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar) / 
-    sum_ll * prod(priors$alpha) * prod(currentPosition$alpha)
+  probAlpha <- (prod(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
+    prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar)) / 
+    (sum_ll * prod(priors$alpha) * prod(currentPosition$alpha))
   probAlpha <- ifelse(is.nan(probAlpha),0 , probAlpha)
   alphaStarAccept <- min(1, probAlpha)
   
@@ -261,9 +261,9 @@ for ( ct in startCount:(trajLength-1) ) {
     exp(rnorm(1, mean = log(b), varBeta))
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
-  probBeta <- prod(calc_likelihoods(1:user_cnt, proposedBeta)) * 
-    prod(prior(beta = betaStar)$beta) * prod(betaStar) / 
-    sum_ll * prod(priors$beta) * prod(currentPosition$beta)
+  probBeta <- (prod(calc_likelihoods(1:user_cnt, proposedBeta)) * 
+    prod(prior(beta = betaStar)$beta) * prod(betaStar)) / 
+    (sum_ll * prod(priors$beta) * prod(currentPosition$beta))
   probBeta <- ifelse(is.nan(probBeta), 0, probBeta)
   betaStarAccept <- min(1, probBeta)
   if (runif(1) < betaStarAccept) {
@@ -286,8 +286,8 @@ for ( ct in startCount:(trajLength-1) ) {
     rnorm(1, mean = p, sd = varPsi)
   }
   proposedPsi <- proposedParams(currentPosition, psi = psiStar)
-  probPsi <- prod(calc_likelihoods(1:user_cnt, proposedPsi)) * prior(psi = psiStar)$psi / 
-    sum_ll * priors$psi
+  probPsi <- (prod(calc_likelihoods(1:user_cnt, proposedPsi)) * prior(psi = psiStar)$psi) / 
+    (sum_ll * priors$psi)
   probPsi <- ifelse(is.nan(probPsi), 0, probPsi)
   psiStarAccept <- min(1, probPsi)
   
@@ -313,11 +313,11 @@ for ( ct in startCount:(trajLength-1) ) {
     propMui <- currentPosition$mu
     propMui[i, ] <- muiStar
     proposedMu <- proposedParams(currentPosition, mu = propMui)
-    probMui <- calc_likelihoods(i, proposedMu) * 
+    probMui <- (calc_likelihoods(i, proposedMu) * 
       prior(mu = muiStar, 
             theta_mu = currentPosition$theta_mu, 
-            Sigma_mu = currentPosition$Sigma_mu)$mu * prod(muiStar) / 
-      current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,])
+            Sigma_mu = currentPosition$Sigma_mu)$mu * prod(muiStar)) / 
+      (current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,]))
     probMui <- ifelse(is.nan(probMui), 0, probMui)
     muiStarAccept <- min(1, probMui)
     
