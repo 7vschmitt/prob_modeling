@@ -1,5 +1,3 @@
-source("DBDA2E-utilities.R")
-
 # Define the Bernoulli likelihood function, p(D|theta).
 # The argument theta could be a vector, not just a scalar.
 likelihood <- function(i, params){
@@ -117,8 +115,8 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   }
   if(!is.null(psi)) {
     result$psi <- dmvnorm(psi, 
-                    mean = rep(0, length(psi)), 
-                    sigma = 10^4 * diag(nrow = length(psi)))
+                          mean = rep(0, length(psi)), 
+                          sigma = 10^4 * diag(nrow = length(psi)))
   }
   if(!is.null(mu)) {
     result$mu <- foreach(m=iter(mu, by = 'row'), .combine = rbind) %dopar% 
@@ -126,8 +124,8 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   }
   if(!is.null(theta_mu)) {
     result$theta_mu <- dmvnorm(theta_mu, 
-                        mean = rep(0, length(theta_mu)), 
-                        sigma = 10^6 * diag(nrow = length(theta_mu)))
+                               mean = rep(0, length(theta_mu)), 
+                               sigma = 10^6 * diag(nrow = length(theta_mu)))
   }
   if(!is.null(Sigma_mu)) {
     result$Sigma_mu <- diwish(Sigma_mu, S = diag(nrow = K), v = K)
@@ -159,9 +157,9 @@ adjustVariance <- function(var, nAccept, nReject) {
 }
 
 # Specify the length of the trajectory, i.e., the number of jumps to try:
-trajLength = 500 # arbitrary large number
+trajLength = 50000 # arbitrary large number
 
-user_cnt = 10
+user_cnt = 25
 # Initialize the vector that will store the results:
 initals = list(mu=rep(c(0.01, 0.01, 0.01, 0.01), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
@@ -177,7 +175,6 @@ trajectory_file <- "mcmc_trajectory"
 if(file.exists(trajectory_file)) {
   load(trajectory_file)
   startCount <- length(trajectory)
-  length(trajectory) <- trajLength
 } else {
   trajectory <- list()
   # Specify where to start the trajectory:
@@ -199,17 +196,17 @@ if(file.exists(counts_file)) {
   nPsiRejected <- 0
   nMuAccepted <- numeric(length = user_cnt)
   nMuRejected <- numeric(length = user_cnt)
+  tailAlphaAcc <- c(0, 0)
+  tailBetaAcc <- c(0, 0)
+  tailPsiAcc <- c(0, 0)
+  tailMuAcc <- c(0, 0)
+  varAlpha <- 0.005
+  varBeta <- 0.005
+  varPsi <- 0.005
+  varMu <- rep(0.0001, K)
 }
 
-tailAlphaAcc <- c(0, 0)
-tailBetaAcc <- c(0, 0)
-tailPsiAcc <- c(0, 0)
-tailMuAcc <- c(0, 0)
 
-varAlpha <- 0.005
-varBeta <- 0.005
-varPsi <- 0.005
-varMu <- rep(0.0001, K)
 paste(Sys.time(), "Start MCMC sampling") %>% print
 for ( ct in startCount:(trajLength-1) ) {
   # initialize current position
@@ -235,7 +232,7 @@ for ( ct in startCount:(trajLength-1) ) {
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
   probAlpha <- (prod(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
-    prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar)) / 
+                  prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar)) / 
     (sum_ll * prod(priors$alpha) * prod(currentPosition$alpha))
   probAlpha <- ifelse(is.nan(probAlpha),0 , probAlpha)
   alphaStarAccept <- min(1, probAlpha)
@@ -262,7 +259,7 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
   probBeta <- (prod(calc_likelihoods(1:user_cnt, proposedBeta)) * 
-    prod(prior(beta = betaStar)$beta) * prod(betaStar)) / 
+                 prod(prior(beta = betaStar)$beta) * prod(betaStar)) / 
     (sum_ll * prod(priors$beta) * prod(currentPosition$beta))
   probBeta <- ifelse(is.nan(probBeta), 0, probBeta)
   betaStarAccept <- min(1, probBeta)
@@ -314,9 +311,9 @@ for ( ct in startCount:(trajLength-1) ) {
     propMui[i, ] <- muiStar
     proposedMu <- proposedParams(currentPosition, mu = propMui)
     probMui <- (calc_likelihoods(i, proposedMu) * 
-      prior(mu = muiStar, 
-            theta_mu = currentPosition$theta_mu, 
-            Sigma_mu = currentPosition$Sigma_mu)$mu * prod(muiStar)) / 
+                  prior(mu = muiStar, 
+                        theta_mu = currentPosition$theta_mu, 
+                        Sigma_mu = currentPosition$Sigma_mu)$mu * prod(muiStar)) / 
       (current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,]))
     probMui <- ifelse(is.nan(probMui), 0, probMui)
     muiStarAccept <- min(1, probMui)
@@ -349,7 +346,7 @@ for ( ct in startCount:(trajLength-1) ) {
       (log(currentPosition$mu[i, ]) - currentPosition$theta_mu) %*% 
         t(log(currentPosition$mu[i, ]) - currentPosition$theta_mu)
     } + diag(K)
-    )
+  )
   v <- 4
   SigmaMuStar <- riwish(S = S, v = v)
   newPosition$Sigma_mu <- SigmaMuStar
@@ -368,7 +365,16 @@ for ( ct in startCount:(trajLength-1) ) {
          nPsiAccepted,
          nPsiRejected,
          nMuAccepted,
-         nMuRejected, file = counts_file)
+         nMuRejected, 
+         tailAlphaAcc,
+         tailBetaAcc,
+         tailPsiAcc,
+         tailMuAcc,
+         varAlpha,
+         varBeta,
+         varPsi,
+         varMu,
+         file = counts_file)
   } 
 }
 
