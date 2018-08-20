@@ -9,7 +9,7 @@ have = want %in% rownames(installed.packages())
 if ( any(!have) ) { install.packages(want[!have], quiet = TRUE, verbose = FALSE) }
 
 for (lib in want) {
-  suppressMessages(require(lib, character.only = TRUE, quietly = TRUE))
+  suppressMessages(library(lib, character.only = TRUE, quietly = TRUE))
 }
 registerDoParallel(cores = detectCores() - 1)
 options(xtable.comment = FALSE)
