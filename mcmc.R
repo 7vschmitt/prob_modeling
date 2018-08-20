@@ -120,7 +120,7 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   }
   if(!is.null(mu)) {
     result$mu <- foreach(m=iter(mu, by = 'row'), .combine = rbind) %dopar% 
-      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu))
+      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu %>% round(digits = 6)))
   }
   if(!is.null(theta_mu)) {
     result$theta_mu <- dmvnorm(theta_mu, 
@@ -149,9 +149,9 @@ proposedParams <- function(current_params, ...) {
 adjustVariance <- function(var, nAccept, nReject) {
   acceptRate <- nAccept / nReject
   if(acceptRate < 0.1) {
-    var <- var / 10
+    var <- var * 0.5
   } else if(acceptRate > 0.4) {
-    var <- var * 10
+    var <- var * 2
   }
   return(var)
 }
@@ -200,10 +200,10 @@ if(file.exists(counts_file)) {
   tailBetaAcc <- c(0, 0)
   tailPsiAcc <- c(0, 0)
   tailMuAcc <- c(0, 0)
-  varAlpha <- 0.005
-  varBeta <- 0.005
-  varPsi <- 0.005
-  varMu <- rep(0.0001, K)
+  varAlpha <- 0.05
+  varBeta <- 0.05
+  varPsi <- 0.5
+  varMu <- rep(1, K)
 }
 
 
@@ -222,12 +222,12 @@ for ( ct in startCount:(trajLength-1) ) {
   
   #### draw alpha
   
-  if(ct %% 50 == 0) {
+  if(ct %% 10 == 0) {
     tailAlphaAcc <- c(nAlphaAccepted - tailAlphaAcc[1], nAlphaRejected - tailAlphaAcc[2])
     varAlpha <- adjustVariance(varAlpha, tailAlphaAcc[1], tailAlphaAcc[2])
   }
   alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
-    exp(rnorm(1, mean = log(a), varAlpha))
+    exp(rnorm(1, mean = log(a), sd = sqrt(varAlpha)))
   } %>% matrix(nrow=nrow(currentPosition$alpha))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
@@ -250,12 +250,12 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw beta
-  if(ct %% 50 == 0) {
+  if(ct %% 10 == 0) {
     tailBetaAcc <- c(nBetaAccepted - tailBetaAcc[1], nBetaRejected - tailBetaAcc[2])
     varBeta <- adjustVariance(varBeta, tailBetaAcc[1], tailBetaAcc[2])
   }
   betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
-    exp(rnorm(1, mean = log(b), varBeta))
+    exp(rnorm(1, mean = log(b), sd = sqrt(varBeta)))
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
   probBeta <- (prod(calc_likelihoods(1:user_cnt, proposedBeta)) * 
@@ -275,12 +275,12 @@ for ( ct in startCount:(trajLength-1) ) {
   
   #### draw psi
   acceptRate <- nPsiAccepted / nPsiRejected
-  if(ct %% 50 == 0) {
+  if(ct %% 10 == 0) {
     tailPsiAcc <- c(nPsiAccepted - tailPsiAcc[1], nPsiRejected - tailPsiAcc[2])
     varPsi <- adjustVariance(varPsi, tailPsiAcc[1], tailPsiAcc[2])
   }
   psiStar <- foreach(p = iter(currentPosition$psi), .combine = c) %dopar% {
-    rnorm(1, mean = p, sd = varPsi)
+    rnorm(1, mean = p, sd = sqrt(varPsi))
   }
   proposedPsi <- proposedParams(currentPosition, psi = psiStar)
   probPsi <- (prod(calc_likelihoods(1:user_cnt, proposedPsi)) * prior(psi = psiStar)$psi) / 
@@ -299,13 +299,13 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw mu^i
-  if(ct %% 50 == 0) {
+  if(ct %% 10 == 0) {
     tailMuAcc <- c(sum(nMuAccepted) - tailMuAcc[1], sum(nMuRejected) - tailMuAcc[2])
     varMu <- adjustVariance(varMu, tailMuAcc[1], tailMuAcc[2])
   }
   foreach(i = 1:user_cnt, .combine=rbind, .export = c("newPosition", "nMuAccepted", "nMuRejected")) %do% {
     muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = cbind) %do% {
-      exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = varMu[k]))
+      exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = sqrt(varMu[k])))
     }
     propMui <- currentPosition$mu
     propMui[i, ] <- muiStar
@@ -336,6 +336,7 @@ for ( ct in startCount:(trajLength-1) ) {
   InvSigmaThetaMu <- solve(Sigma_theta_mu)
   B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
   A <- t(B) %*% t( t(colSums(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
+  if(!isSymmetric(B)) B <- B %>% round(digits = 6)
   
   thetaMuStar <- rmvnorm(1, mean = A, sigma = B) %>% as.numeric()
   newPosition$theta_mu <- thetaMuStar
