@@ -527,7 +527,7 @@ log_likelihood <- function(i, params){
           as.numeric() # erste Zeile
         
         sum_j <- numeric()
-        for (j in 1:3){ # zweite Zeile erste summe 1:K-1
+        for (j in 1:(length(ad_types)-1)){ # zweite Zeile erste summe 1:K-1
           # j schleife umgehen
             sum_index <- ifelse(data_new %>% 
                                   filter(user == i & event == k) %>% 
