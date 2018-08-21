@@ -11,10 +11,10 @@ likelihood <- function(i, params){
     if (total_counts[i , k+1] != 0){
       first_two_lines <- numeric()
       for (l in 1:(total_counts[i , k+1])){ 
-        first_line <- llMu[i,k] * exp(llPsi[k] * (data_new %>% 
-                                                    filter(user == i & event == k) %>%
-                                                    .[l, ] %>% 
-                                                    select(purchase))) %>% 
+        first_line <- llMu[k] * exp(llPsi[k] * (data_new %>% 
+                                                  filter(user == i & event == k) %>%
+                                                  .[l, ] %>% 
+                                                  select(purchase))) %>% 
           as.numeric() # erste Zeile
         
         sum_j <- numeric()
@@ -70,7 +70,7 @@ likelihood <- function(i, params){
         tmp_m <- exp(llPsi[k]*(m+1))*(t_m1 - t_m)
         sum_m <- sum_m + tmp_m # Summe m
       } # m Ende
-      exponent_teil1 <- sum_m * llMu[i,k]
+      exponent_teil1 <- sum_m * llMu[k]
       
     } # if ende
     else {exponent_teil1 <- 0}
