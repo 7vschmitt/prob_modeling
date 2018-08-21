@@ -5,20 +5,20 @@ likelihood <- function(i, params){
   llBeta <- params$beta
   llPsi <- params$psi
   llMu <- params$mu
-  prod_k <- 1 # wird spaeter mit ergebnis aus k-loop multipliziert
+  sum_k_log <- 0 # wird spaeter mit ergebnis aus k-loop multipliziert
   for (k in 1:length(ad_types)){
-    prod_l <- 1 # wird sp?ter mit ergebnis aus l-loop multipliziert
+    sum_l_log <- 0 # wird sp?ter mit ergebnis aus l-loop multipliziert
     if (total_counts[i , k+1] != 0){
       first_two_lines <- numeric()
       for (l in 1:(total_counts[i , k+1])){ 
-        first_line <- llMu[k] * exp(llPsi[k] * (data_new %>% 
-                                                  filter(user == i & event == k) %>%
-                                                  .[l, ] %>% 
-                                                  select(purchase))) %>% 
+        first_line <- llMu[i,k] * exp(llPsi[k] * (data_new %>% 
+                                                    filter(user == i & event == k) %>%
+                                                    .[l, ] %>% 
+                                                    select(purchase))) %>% 
           as.numeric() # erste Zeile
         
         sum_j <- numeric()
-        for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe
+        for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe 1:K-1
           # j schleife umgehen
           sum_index <- ifelse(data_new %>% 
                                 filter(user == i & event == k) %>% 
@@ -54,16 +54,11 @@ likelihood <- function(i, params){
     sum_m <- 0
     purchase_cnt <- total_counts[i,5]
     if (purchase_cnt > 0){
-      for (m in 0:purchase_cnt){ # 0 bis Anzahl Kaeufe in 120 Tagen
-        t_m1 <- ifelse(m == purchase_cnt, 
-                       T, 
-                       ifelse(purchase_cnt != 0,
-                              data_new %>% filter(user ==i & event == K) %>% 
-                                filter(row_number() == m+1) %>% 
-                                select(timestamp) %>% 
-                                as.numeric(), 
-                              0)
-        )
+      for (m in 0:(purchase_cnt-1)){ # 0 bis Anzahl Kaeufe in 120 Tagen -1
+        t_m1 <- data_new %>% filter(user ==i & event == K) %>% 
+          filter(row_number() == m+1) %>% 
+          select(timestamp) %>% 
+          as.numeric()
         t_m <- ifelse(m == 0, 
                       0,
                       ifelse(purchase_cnt != 0, 
@@ -72,15 +67,15 @@ likelihood <- function(i, params){
                                select(timestamp) %>% as.numeric, 
                              0)
         )
-        tmp_m <- exp(llPsi[k]*m)*(t_m1 - t_m)
+        tmp_m <- exp(llPsi[k]*(m+1))*(t_m1 - t_m)
         sum_m <- sum_m + tmp_m # Summe m
       } # m Ende
-      exponent_teil1 <- sum_m * llMu[k]
+      exponent_teil1 <- sum_m * llMu[i,k]
     } # if ende
     else {exponent_teil1 <- 0}
     browser(expr = is.na(exponent_teil1))
     exponent_teil2 <- 0
-    for (j in 1:(length(ad_types) -1)){ # letzte Zeile erste Summe
+    for (j in 1:3){ # letzte Zeile erste Summe
       # j schleife umgehen?
       sum_m <- numeric()
       if (total_counts[i,j+1] > 0) {
@@ -96,10 +91,9 @@ likelihood <- function(i, params){
     } # j Ende
     exponent <- exponent_teil1 - exponent_teil2
     third_fourth_line <- exp(exponent) 
-    
-    prod_k <- ((prod_l * third_fourth_line) * prod_k) %>% as.numeric() # Prdoukt aus Zeil 1+2 und Zeile 3-4  
+    sum_k_log <- log(prod_l * third_fourth_line) + sum_k_log %>% as.numeric()
   }  # loop over all ad types
-  return(prod_k)
+  return(sum_k_log)
 } # Funktion Ende
 
 # Define the prior density function. 
@@ -108,24 +102,24 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   result <- list()
   if(!is.null(alpha)) {
     result$alpha <- foreach(i=iter(alpha), .combine = rbind) %dopar% { 
-      dgamma(i, .5, .5) } %>% matrix(nrow=nrow(alpha))
+      dgamma(i, .5, .5, log = T) } %>% matrix(nrow=nrow(alpha))
   }
   if(!is.null(beta)) {
-    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, 25, .5)
+    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, 25, .5, log = T)
   }
   if(!is.null(psi)) {
     result$psi <- dmvnorm(psi, 
                           mean = rep(0, length(psi)), 
-                          sigma = 10^4 * diag(nrow = length(psi)))
+                          sigma = 10^4 * diag(nrow = length(psi)), log = T)
   }
   if(!is.null(mu)) {
     result$mu <- foreach(m=iter(mu, by = 'row'), .combine = rbind) %dopar% 
-      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu %>% round(digits = 6)))
+      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu %>% round(digits = 7), log = T))
   }
   if(!is.null(theta_mu)) {
     result$theta_mu <- dmvnorm(theta_mu, 
                                mean = rep(0, length(theta_mu)), 
-                               sigma = 10^6 * diag(nrow = length(theta_mu)))
+                               sigma = 10^6 * diag(nrow = length(theta_mu)), log = T)
   }
   if(!is.null(Sigma_mu)) {
     result$Sigma_mu <- diwish(Sigma_mu, S = diag(nrow = K), v = K)
@@ -149,9 +143,9 @@ proposedParams <- function(current_params, ...) {
 adjustVariance <- function(var, nAccept, nReject) {
   acceptRate <- nAccept / nReject
   if(acceptRate < 0.1) {
-    var <- var * 0.5
+    var <- var * 0.75
   } else if(acceptRate > 0.4) {
-    var <- var * 2
+    var <- var * 1.25
   }
   return(var)
 }
@@ -159,7 +153,7 @@ adjustVariance <- function(var, nAccept, nReject) {
 # Specify the length of the trajectory, i.e., the number of jumps to try:
 trajLength = 50000 # arbitrary large number
 
-user_cnt = 25
+user_cnt = 24
 # Initialize the vector that will store the results:
 initals = list(mu=rep(c(0.01, 0.01, 0.01, 0.01), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
@@ -200,10 +194,10 @@ if(file.exists(counts_file)) {
   tailBetaAcc <- c(0, 0)
   tailPsiAcc <- c(0, 0)
   tailMuAcc <- c(0, 0)
-  varAlpha <- 0.05
-  varBeta <- 0.05
+  varAlpha <- 0.5
+  varBeta <- 0.5
   varPsi <- 0.5
-  varMu <- rep(1, K)
+  varMu <- rep(5, K)
 }
 
 
@@ -216,24 +210,25 @@ for ( ct in startCount:(trajLength-1) ) {
   current_lls <- foreach(i = 1:user_cnt, .combine = rbind) %dopar% {
     likelihood(i, currentPosition)
   }
-  sum_ll <- prod(current_lls)
+  sum_ll <- sum(current_lls)
   # calc priors
   priors <- do.call(prior, currentPosition)
   
   #### draw alpha
   
   if(ct %% 10 == 0) {
-    tailAlphaAcc <- c(nAlphaAccepted - tailAlphaAcc[1], nAlphaRejected - tailAlphaAcc[2])
-    varAlpha <- adjustVariance(varAlpha, tailAlphaAcc[1], tailAlphaAcc[2])
+    varAlpha <- adjustVariance(varAlpha, nAlphaAccepted - tailAlphaAcc[1], nAlphaRejected - tailAlphaAcc[2])
+    tailAlphaAcc <- c(nAlphaAccepted, nAlphaRejected)
   }
   alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
-    exp(rnorm(1, mean = log(a), sd = sqrt(varAlpha)))
+    exp(rnorm(1, mean = log(a), sd = varAlpha))
   } %>% matrix(nrow=nrow(currentPosition$alpha))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
-  probAlpha <- (prod(calc_likelihoods(1:user_cnt, proposedAlpha)) * 
-                  prod(prior(alpha = alphaStar)$alpha) * prod(alphaStar)) / 
-    (sum_ll * prod(priors$alpha) * prod(currentPosition$alpha))
+  # exp(log(proposed) - log(current)) = proposed/current
+  probAlpha <- exp((sum(calc_likelihoods(1:user_cnt, proposedAlpha)) + 
+                  sum(prior(alpha = alphaStar)$alpha) + sum(log(alphaStar))) - 
+    (sum_ll + sum(priors$alpha) + sum(log(currentPosition$alpha))))
   probAlpha <- ifelse(is.nan(probAlpha),0 , probAlpha)
   alphaStarAccept <- min(1, probAlpha)
   
@@ -251,16 +246,16 @@ for ( ct in startCount:(trajLength-1) ) {
   
   #### draw beta
   if(ct %% 10 == 0) {
-    tailBetaAcc <- c(nBetaAccepted - tailBetaAcc[1], nBetaRejected - tailBetaAcc[2])
-    varBeta <- adjustVariance(varBeta, tailBetaAcc[1], tailBetaAcc[2])
+    varBeta <- adjustVariance(varBeta, nBetaAccepted - tailBetaAcc[1], nBetaRejected - tailBetaAcc[2])
+    tailBetaAcc <- c(nBetaAccepted, nBetaRejected)
   }
   betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
-    exp(rnorm(1, mean = log(b), sd = sqrt(varBeta)))
+    exp(rnorm(1, mean = log(b), sd = varBeta))
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
-  probBeta <- (prod(calc_likelihoods(1:user_cnt, proposedBeta)) * 
-                 prod(prior(beta = betaStar)$beta) * prod(betaStar)) / 
-    (sum_ll * prod(priors$beta) * prod(currentPosition$beta))
+  probBeta <- exp((sum(calc_likelihoods(1:user_cnt, proposedBeta)) + 
+                 sum(prior(beta = betaStar)$beta) + sum(log(betaStar))) - 
+    (sum_ll + sum(priors$beta) + sum(log(currentPosition$beta))))
   probBeta <- ifelse(is.nan(probBeta), 0, probBeta)
   betaStarAccept <- min(1, probBeta)
   if (runif(1) < betaStarAccept) {
@@ -276,18 +271,18 @@ for ( ct in startCount:(trajLength-1) ) {
   #### draw psi
   acceptRate <- nPsiAccepted / nPsiRejected
   if(ct %% 10 == 0) {
-    tailPsiAcc <- c(nPsiAccepted - tailPsiAcc[1], nPsiRejected - tailPsiAcc[2])
-    varPsi <- adjustVariance(varPsi, tailPsiAcc[1], tailPsiAcc[2])
+    varPsi <- adjustVariance(varPsi, nPsiAccepted - tailPsiAcc[1], nPsiRejected - tailPsiAcc[2])
+    tailPsiAcc <- c(nPsiAccepted, nPsiRejected)
   }
   psiStar <- foreach(p = iter(currentPosition$psi), .combine = c) %dopar% {
-    rnorm(1, mean = p, sd = sqrt(varPsi))
+    rnorm(1, mean = p, sd = varPsi)
   }
   proposedPsi <- proposedParams(currentPosition, psi = psiStar)
-  probPsi <- (prod(calc_likelihoods(1:user_cnt, proposedPsi)) * prior(psi = psiStar)$psi) / 
-    (sum_ll * priors$psi)
+  probPsi <- exp((sum(calc_likelihoods(1:user_cnt, proposedPsi)) + prior(psi = psiStar)$psi) - 
+    (sum_ll + priors$psi))
   probPsi <- ifelse(is.nan(probPsi), 0, probPsi)
   psiStarAccept <- min(1, probPsi)
-  
+  browser(expr = ct == 25)
   if (runif(1) < psiStarAccept) {
     # accept the proposed jump
     newPosition$psi <- psiStar
@@ -300,21 +295,21 @@ for ( ct in startCount:(trajLength-1) ) {
   
   #### draw mu^i
   if(ct %% 10 == 0) {
-    tailMuAcc <- c(sum(nMuAccepted) - tailMuAcc[1], sum(nMuRejected) - tailMuAcc[2])
-    varMu <- adjustVariance(varMu, tailMuAcc[1], tailMuAcc[2])
+    varMu <- adjustVariance(varMu, sum(nMuAccepted) - tailMuAcc[1], sum(nMuRejected) - tailMuAcc[2])
+    tailMuAcc <- c(sum(nMuAccepted), sum(nMuRejected))
   }
   foreach(i = 1:user_cnt, .combine=rbind, .export = c("newPosition", "nMuAccepted", "nMuRejected")) %do% {
     muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = cbind) %do% {
-      exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = sqrt(varMu[k])))
+      exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = varMu[k]))
     }
     propMui <- currentPosition$mu
     propMui[i, ] <- muiStar
     proposedMu <- proposedParams(currentPosition, mu = propMui)
-    probMui <- (calc_likelihoods(i, proposedMu) * 
+    probMui <- exp((calc_likelihoods(i, proposedMu) + 
                   prior(mu = muiStar, 
                         theta_mu = currentPosition$theta_mu, 
-                        Sigma_mu = currentPosition$Sigma_mu)$mu * prod(muiStar)) / 
-      (current_lls[i] * priors$mu[i] * prod(currentPosition$mu[i,]))
+                        Sigma_mu = currentPosition$Sigma_mu)$mu + sum(log(muiStar))) - 
+      (current_lls[i] + priors$mu[i] + sum(log(currentPosition$mu[i,]))))
     probMui <- ifelse(is.nan(probMui), 0, probMui)
     muiStarAccept <- min(1, probMui)
     
@@ -336,7 +331,7 @@ for ( ct in startCount:(trajLength-1) ) {
   InvSigmaThetaMu <- solve(Sigma_theta_mu)
   B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
   A <- t(B) %*% t( t(colSums(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
-  if(!isSymmetric(B)) B <- B %>% round(digits = 6)
+  if(!isSymmetric(B)) B <- B %>% round(digits = 7)
   
   thetaMuStar <- rmvnorm(1, mean = A, sigma = B) %>% as.numeric()
   newPosition$theta_mu <- thetaMuStar
