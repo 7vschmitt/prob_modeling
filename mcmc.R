@@ -4,10 +4,10 @@ likelihood <- function(i, params){
   llAlpha <- params$alpha
   llBeta <- params$beta
   llPsi <- params$psi
-  llMu <- params$mu
+  llMu <- params$mu[i,]
   sum_k_log <- 0 # wird spaeter mit ergebnis aus k-loop multipliziert
   for (k in 1:length(ad_types)){
-    sum_l_log <- 0 # wird sp?ter mit ergebnis aus l-loop multipliziert
+    prod_l <- 1 # wird sp?ter mit ergebnis aus l-loop multipliziert
     if (total_counts[i , k+1] != 0){
       first_two_lines <- numeric()
       for (l in 1:(total_counts[i , k+1])){ 
@@ -18,7 +18,7 @@ likelihood <- function(i, params){
           as.numeric() # erste Zeile
         
         sum_j <- numeric()
-        for (j in 1:(length(ad_types) -1)){ # zweite Zeile erste summe 1:K-1
+        for (j in 1:(length(ad_types)-1)){ # zweite Zeile erste summe 1:K-1
           # j schleife umgehen
           sum_index <- ifelse(data_new %>% 
                                 filter(user == i & event == k) %>% 
@@ -71,6 +71,7 @@ likelihood <- function(i, params){
         sum_m <- sum_m + tmp_m # Summe m
       } # m Ende
       exponent_teil1 <- sum_m * llMu[i,k]
+      
     } # if ende
     else {exponent_teil1 <- 0}
     browser(expr = is.na(exponent_teil1))
@@ -89,9 +90,9 @@ likelihood <- function(i, params){
         exponent_teil2 <- exponent_teil2 + sum_m
       } 
     } # j Ende
-    exponent <- exponent_teil1 - exponent_teil2
-    third_fourth_line <- exp(exponent) 
-    sum_k_log <- log(prod_l * third_fourth_line) + sum_k_log %>% as.numeric()
+    
+    third_fourth_line <- exponent_teil1 - exponent_teil2
+    sum_k_log <- log(prod_l) + third_fourth_line + sum_k_log %>% as.numeric()
   }  # loop over all ad types
   return(sum_k_log)
 } # Funktion Ende
@@ -114,7 +115,7 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   }
   if(!is.null(mu)) {
     result$mu <- foreach(m=iter(mu, by = 'row'), .combine = rbind) %dopar% 
-      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu %>% round(digits = 7), log = T))
+      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu, log = T))
   }
   if(!is.null(theta_mu)) {
     result$theta_mu <- dmvnorm(theta_mu, 
@@ -130,6 +131,10 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
 calc_likelihoods <- function(users, params) {
   ll <- foreach(i = iter(users), .combine = rbind) %dopar% likelihood(i, params)
   ll
+}
+
+makeSymmetric <- function(matrix) {
+  return((matrix + t(matrix)) / 2)
 }
 
 proposedParams <- function(current_params, ...) {
@@ -153,7 +158,7 @@ adjustVariance <- function(var, nAccept, nReject) {
 # Specify the length of the trajectory, i.e., the number of jumps to try:
 trajLength = 50000 # arbitrary large number
 
-user_cnt = 24
+user_cnt = 25
 # Initialize the vector that will store the results:
 initals = list(mu=rep(c(0.01, 0.01, 0.01, 0.01), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
@@ -197,7 +202,7 @@ if(file.exists(counts_file)) {
   varAlpha <- 0.5
   varBeta <- 0.5
   varPsi <- 0.5
-  varMu <- rep(5, K)
+  varMu <- rep(1.5, K)
 }
 
 
@@ -220,9 +225,14 @@ for ( ct in startCount:(trajLength-1) ) {
     varAlpha <- adjustVariance(varAlpha, nAlphaAccepted - tailAlphaAcc[1], nAlphaRejected - tailAlphaAcc[2])
     tailAlphaAcc <- c(nAlphaAccepted, nAlphaRejected)
   }
-  alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
-    exp(rnorm(1, mean = log(a), sd = varAlpha))
-  } %>% matrix(nrow=nrow(currentPosition$alpha))
+  # alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
+  #   exp(rnorm(1, mean = log(a), sd = varAlpha))
+  # } %>% matrix(nrow=nrow(currentPosition$alpha))
+  alphaStar <- foreach(j = 1:nrow(currentPosition$alpha), .combine = rbind) %:% 
+    foreach(k = 1:ncol(currentPosition$alpha)) %dopar% {
+      rlnorm(1, meanlog = log(currentPosition$alpha[j,k]), 
+             sdlog = sqrt(log(1 + alpha_sd[j,k]^2 / currentPosition$alpha[j,k])))    
+  } %>% unlist() %>% matrix(nrow=nrow(currentPosition$alpha))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
   # exp(log(proposed) - log(current)) = proposed/current
@@ -249,8 +259,12 @@ for ( ct in startCount:(trajLength-1) ) {
     varBeta <- adjustVariance(varBeta, nBetaAccepted - tailBetaAcc[1], nBetaRejected - tailBetaAcc[2])
     tailBetaAcc <- c(nBetaAccepted, nBetaRejected)
   }
-  betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
-    exp(rnorm(1, mean = log(b), sd = varBeta))
+  # betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
+  #   exp(rnorm(1, mean = log(b), sd = varBeta))
+  # }
+  betaStar <- foreach(j = 1:length(currentPosition$beta), .combine = c) %dopar% {
+    rlnorm(1, meanlog = log(currentPosition$beta[j]), 
+           sdlog = sqrt(log(1 + beta_sd[j]^2/currentPosition$beta[j]^2)))
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
   probBeta <- exp((sum(calc_likelihoods(1:user_cnt, proposedBeta)) + 
@@ -274,15 +288,14 @@ for ( ct in startCount:(trajLength-1) ) {
     varPsi <- adjustVariance(varPsi, nPsiAccepted - tailPsiAcc[1], nPsiRejected - tailPsiAcc[2])
     tailPsiAcc <- c(nPsiAccepted, nPsiRejected)
   }
-  psiStar <- foreach(p = iter(currentPosition$psi), .combine = c) %dopar% {
-    rnorm(1, mean = p, sd = varPsi)
+  psiStar <- foreach(k = 1:length(currentPosition$psi), .combine = c) %dopar% {
+    rnorm(1, mean = currentPosition$psi[k], sd = psi_sd[k])
   }
   proposedPsi <- proposedParams(currentPosition, psi = psiStar)
   probPsi <- exp((sum(calc_likelihoods(1:user_cnt, proposedPsi)) + prior(psi = psiStar)$psi) - 
     (sum_ll + priors$psi))
   probPsi <- ifelse(is.nan(probPsi), 0, probPsi)
   psiStarAccept <- min(1, probPsi)
-  browser(expr = ct == 25)
   if (runif(1) < psiStarAccept) {
     # accept the proposed jump
     newPosition$psi <- psiStar
@@ -300,7 +313,7 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   foreach(i = 1:user_cnt, .combine=rbind, .export = c("newPosition", "nMuAccepted", "nMuRejected")) %do% {
     muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = cbind) %do% {
-      exp(rnorm(1, mean = log(currentPosition$mu[i,k]), sd = varMu[k]))
+      rlnorm(1, meanlog = log(currentPosition$mu[i,k]), sdlog = sqrt(log(1 + varMu^2 / currentPosition$mu[i,k]^2)))
     }
     propMui <- currentPosition$mu
     propMui[i, ] <- muiStar
@@ -331,7 +344,7 @@ for ( ct in startCount:(trajLength-1) ) {
   InvSigmaThetaMu <- solve(Sigma_theta_mu)
   B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
   A <- t(B) %*% t( t(colSums(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
-  if(!isSymmetric(B)) B <- B %>% round(digits = 7)
+  if(!isSymmetric(B)) B <- makeSymmetric(B)
   
   thetaMuStar <- rmvnorm(1, mean = A, sigma = B) %>% as.numeric()
   newPosition$theta_mu <- thetaMuStar
@@ -345,6 +358,8 @@ for ( ct in startCount:(trajLength-1) ) {
   )
   v <- 4
   SigmaMuStar <- riwish(S = S, v = v)
+  # avoid assymetry through bad rounding
+  if(!isSymmetric(SigmaMuStar)) SigmaMuStar <- makeSymmetric(SigmaMuStar)
   newPosition$Sigma_mu <- SigmaMuStar
   
   #### finally set new trajectory
