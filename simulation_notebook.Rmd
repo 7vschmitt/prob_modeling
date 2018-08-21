@@ -489,6 +489,206 @@ system.time({ foreach(i = 1:100, .combine = c, .packages = "dplyr") %dopar% {lik
 stopCluster(cl)
 ```
 
+# Log Likelihood
+
+```{r}
+log_likelihood <- function(i, params){
+  llAlpha <- params$alpha
+  llBeta <- params$beta
+  llPsi <- params$psi
+  llMu <- params$mu
+  sum_k_log <- 0 # wird spaeter mit ergebnis aus k-loop multipliziert
+  for (k in 1:length(ad_types)){
+    prod_l <- 1 # wird sp?ter mit ergebnis aus l-loop multipliziert
+    if (total_counts[i , k+1] != 0){
+      first_two_lines <- numeric()
+      for (l in 1:(total_counts[i , k+1])){ 
+        first_line <- llMu[i,k] * exp(llPsi[k] * (data_new %>% 
+                                              filter(user == i & event == k) %>%
+                                                  .[l, ] %>% 
+                                                  select(purchase))) %>% 
+          as.numeric() # erste Zeile
+        
+        sum_j <- numeric()
+        for (j in 1:3){ # zweite Zeile erste summe 1:K-1
+          # j schleife umgehen
+            sum_index <- ifelse(data_new %>% 
+                                  filter(user == i & event == k) %>% 
+                                  plyr::empty(), #if is empty
+                                0, #then
+                                data_new %>% #else
+                                  filter(user == i & event == k) %>% 
+                                  filter(row_number() ==l) %>% 
+                                  select(j+3) %>% as.numeric()
+                                )
+            if (sum_index > 0){
+            sum_m <- numeric()
+            t_l <- data_new %>% 
+              filter(user ==i & event==k) %>% 
+              filter(row_number() == l) %>% 
+              select(timestamp) %>% as.numeric()
+            t_m <- data_new %>% filter(user ==i & event==j) %>% 
+              select(timestamp) 
+            # second line:
+            sum_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m[1:sum_index,]))
+              
+              } else {sum_m <- 0} 
+            sum_j[j] <- sum(sum_m) # Summe j
+            } # j Ende
+        first_two_lines[l] <- first_line + sum(sum_j) # erste und zweite Zeile
+      } 
+    } else {
+      first_two_lines <- 1
+    }
+    prod_l <- prod(first_two_lines)
+    
+      # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
+    sum_m <- 0
+    purchase_cnt <- total_counts[i,5]
+    if (purchase_cnt > 0){
+    for (m in 0:(purchase_cnt-1)){ # 0 bis Anzahl Kaeufe in 120 Tagen -1
+      t_m1 <- data_new %>% filter(user ==i & event == K) %>% 
+                         filter(row_number() == m+1) %>% 
+                         select(timestamp) %>% 
+                         as.numeric()
+      t_m <- ifelse(m == 0, 
+                    0,
+                    ifelse(purchase_cnt != 0, 
+                           data_new %>% filter(user ==i & event == K) %>% 
+                             filter(row_number() == m) %>% 
+                             select(timestamp) %>% as.numeric, 
+                           0)
+      )
+      tmp_m <- exp(llPsi[k]*(m+1))*(t_m1 - t_m)
+      sum_m <- sum_m + tmp_m # Summe m
+    } # m Ende
+    exponent_teil1 <- sum_m * llMu[i,k]
+    } # if ende
+    else {exponent_teil1 <- 0}
+    browser(expr = is.na(exponent_teil1))
+    exponent_teil2 <- 0
+    for (j in 1:3){ # letzte Zeile erste Summe
+      # j schleife umgehen?
+      sum_m <- numeric()
+      if (total_counts[i,j+1] > 0) {
+        #for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
+          t_m_neu <- data_new %>% filter(user ==i, event == j) %>% 
+            #filter(row_number() == m) %>% 
+            select(timestamp) # %>% as.numeric()
+          tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
+          sum_m <- sum(tmp_m) # Summe m
+        #} # m Ende
+        exponent_teil2 <- exponent_teil2 + sum_m
+      } 
+    } # j Ende
+    exponent <- exponent_teil1 - exponent_teil2
+    third_fourth_line <- exp(exponent) 
+    sum_k_log <- log(prod_l * third_fourth_line) + sum_k_log %>% as.numeric()
+  }  # loop over all ad types
+  return(sum_k_log)
+} # Funktion Ende
+```
+
+# Log Likelihood 2
+
+```{r}
+log_likelihood <- function(i, params){
+  llAlpha <- params$alpha
+  llBeta <- params$beta
+  llPsi <- params$psi
+  llMu <- params$mu
+  sum_k_log <- 0 # wird spaeter mit ergebnis aus k-loop multipliziert
+  for (k in 1:length(ad_types)){
+    sum_l_log <- 0 # wird sp?ter mit ergebnis aus l-loop multipliziert
+    if (total_counts[i , k+1] != 0){
+      first_two_lines <- numeric()
+      for (l in 1:(total_counts[i , k+1])){ 
+        first_line <- llMu[i,k] * exp(llPsi[k] * (data_new %>% 
+                                              filter(user == i & event == k) %>%
+                                                  .[l, ] %>% 
+                                                  select(purchase))) %>% 
+          as.numeric() # erste Zeile
+        
+        sum_j <- numeric()
+        for (j in 1:3){ # zweite Zeile erste summe 1:K-1
+          # j schleife umgehen
+            sum_index <- ifelse(data_new %>% 
+                                  filter(user == i & event == k) %>% 
+                                  plyr::empty(), #if is empty
+                                0, #then
+                                data_new %>% #else
+                                  filter(user == i & event == k) %>% 
+                                  filter(row_number() ==l) %>% 
+                                  select(j+3) %>% as.numeric()
+                                )
+            if (sum_index > 0){
+            sum_m <- numeric()
+            t_l <- data_new %>% 
+              filter(user ==i & event==k) %>% 
+              filter(row_number() == l) %>% 
+              select(timestamp) %>% as.numeric()
+            t_m <- data_new %>% filter(user ==i & event==j) %>% 
+              select(timestamp) 
+            # second line:
+            sum_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m[1:sum_index,]))
+              
+              } else {sum_m <- 0} 
+            sum_j[j] <- sum(sum_m) # Summe j
+            } # j Ende
+        first_two_lines[l] <- first_line + sum(sum_j) # erste und zweite Zeile
+      } 
+    } else {
+      first_two_lines <- 1
+    }
+    prod_l <- prod(first_two_lines)
+    
+      # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
+    sum_m <- 0
+    purchase_cnt <- total_counts[i,5]
+    if (purchase_cnt > 0){
+    for (m in 0:(purchase_cnt-1)){ # 0 bis Anzahl Kaeufe in 120 Tagen -1
+      t_m1 <- data_new %>% filter(user ==i & event == K) %>% 
+                         filter(row_number() == m+1) %>% 
+                         select(timestamp) %>% 
+                         as.numeric()
+      t_m <- ifelse(m == 0, 
+                    0,
+                    ifelse(purchase_cnt != 0, 
+                           data_new %>% filter(user ==i & event == K) %>% 
+                             filter(row_number() == m) %>% 
+                             select(timestamp) %>% as.numeric, 
+                           0)
+      )
+      tmp_m <- exp(llPsi[k]*(m+1))*(t_m1 - t_m)
+      sum_m <- sum_m + tmp_m # Summe m
+    } # m Ende
+    exponent_teil1 <- sum_m * llMu[i,k]
+    } # if ende
+    else {exponent_teil1 <- 0}
+    browser(expr = is.na(exponent_teil1))
+    exponent_teil2 <- 0
+    for (j in 1:3){ # letzte Zeile erste Summe
+      # j schleife umgehen?
+      sum_m <- numeric()
+      if (total_counts[i,j+1] > 0) {
+        #for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
+          t_m_neu <- data_new %>% filter(user ==i, event == j) %>% 
+            #filter(row_number() == m) %>% 
+            select(timestamp) # %>% as.numeric()
+          tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
+          sum_m <- sum(tmp_m) # Summe m
+        #} # m Ende
+        exponent_teil2 <- exponent_teil2 + sum_m
+      } 
+    } # j Ende
+    exponent <- exponent_teil1 - exponent_teil2
+    third_fourth_line <- exp(exponent) 
+    sum_k_log <- log(prod_l * third_fourth_line) + sum_k_log %>% as.numeric()
+  }  # loop over all ad types
+  return(sum_k_log)
+} # Funktion Ende
+```
+
 
 # Parameter estimation
 ## MCMC Model
