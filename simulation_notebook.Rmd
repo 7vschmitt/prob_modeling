@@ -61,7 +61,7 @@ colnames(Sigma_mu_mean) <- ad_types
   
 n <- 12000
 #inv_df <- n - 1
-inv_df <- 6
+inv_df <- n - 1
 psi_mean <- c(-0.5664, -0.7556, -0.6235, 0.2787)
 psi_sd <- c(0.1228, 0.2348, 0.1229, 0.2160)
 names(psi_mean) <- ad_types
@@ -334,10 +334,24 @@ data %>%
   group_by(stream) %>%
   summarise(n = n()) %>%
   arrange(desc(n)) %>% 
-  head(n=25)
+  head(n=100)
 ```
-
-
+Most ommon click streams with purchases
+```{r}
+data %>%
+  mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
+                              'search' = 'S', 'display' = 'D')) %>%
+  group_by(user) %>%
+  # concatenate all event abbr. into one string
+  summarise(stream = paste(event_short, collapse = "")) %>% 
+  filter(grepl('P', stream)) %>% 
+  mutate(ev_cnt = stream %>% nchar()) %>%
+  # cut streams longer than 25 chars
+  group_by(stream) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>% 
+  head(n=100)
+```
 ```{r}
 all_comb <- expand.grid(user = data$user %>% unique, event = ad_types)
 event_counts <- data %>%
