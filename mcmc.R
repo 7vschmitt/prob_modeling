@@ -5,37 +5,38 @@ likelihood <- function(i, params){
   llBeta <- params$beta
   llPsi <- params$psi
   llMu <- params$mu[i,]
+  data_new_i <- data_new %>% filter(user == i)
   sum_k_log <- 0 # wird spaeter mit ergebnis aus k-loop multipliziert
   for (k in 1:length(ad_types)){
     prod_l <- 1 # wird sp?ter mit ergebnis aus l-loop multipliziert
     if (total_counts[i , k+1] != 0){
       first_two_lines <- numeric()
       for (l in 1:(total_counts[i , k+1])){ 
-        first_line <- llMu[k] * exp(llPsi[k] * (data_new %>% 
-                                                  filter(user == i & event == k) %>%
+        first_line <- llMu[k] * exp(llPsi[k] * (data_new_i %>% 
+                                                  filter(event == k) %>%
                                                   .[l, ] %>% 
                                                   select(purchase))) %>% 
           as.numeric() # erste Zeile
         
         sum_j <- numeric()
-        for (j in 1:(length(ad_types)-1)){ # zweite Zeile erste summe 1:K-1
+        for (j in 1:3){ # zweite Zeile erste summe 1:K-1
           # j schleife umgehen
-          sum_index <- ifelse(data_new %>% 
-                                filter(user == i & event == k) %>% 
+          sum_index <- ifelse(data_new_i %>% 
+                                filter(event == k) %>% 
                                 plyr::empty(), #if is empty
                               0, #then
-                              data_new %>% #else
-                                filter(user == i & event == k) %>% 
+                              data_new_i %>% #else
+                                filter(event == k) %>% 
                                 filter(row_number() ==l) %>% 
                                 select(j+3) %>% as.numeric()
           )
           if (sum_index > 0){
             sum_m <- numeric()
-            t_l <- data_new %>% 
-              filter(user ==i & event==k) %>% 
+            t_l <- data_new_i %>% 
+              filter(event==k) %>% 
               filter(row_number() == l) %>% 
               select(timestamp) %>% as.numeric()
-            t_m <- data_new %>% filter(user ==i & event==j) %>% 
+            t_m <- data_new_i %>% filter(event==j) %>% 
               select(timestamp) 
             # second line:
             sum_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m[1:sum_index,]))
@@ -55,14 +56,14 @@ likelihood <- function(i, params){
     purchase_cnt <- total_counts[i,5]
     if (purchase_cnt > 0){
       for (m in 0:(purchase_cnt-1)){ # 0 bis Anzahl Kaeufe in 120 Tagen -1
-        t_m1 <- data_new %>% filter(user ==i & event == K) %>% 
+        t_m1 <- data_new_i %>% filter(event == K) %>% 
           filter(row_number() == m+1) %>% 
           select(timestamp) %>% 
           as.numeric()
         t_m <- ifelse(m == 0, 
                       0,
                       ifelse(purchase_cnt != 0, 
-                             data_new %>% filter(user ==i & event == K) %>% 
+                             data_new_i %>% filter(event == K) %>% 
                                filter(row_number() == m) %>% 
                                select(timestamp) %>% as.numeric, 
                              0)
@@ -80,10 +81,9 @@ likelihood <- function(i, params){
       # j schleife umgehen?
       sum_m <- numeric()
       if (total_counts[i,j+1] > 0) {
-        #for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
-        t_m_neu <- data_new %>% filter(user ==i, event == j) %>% 
-          #filter(row_number() == m) %>% 
-          select(timestamp) # %>% as.numeric()
+        # letzte Zeile zweite Summe
+        t_m_neu <- data_new_i %>% filter(event == j) %>% 
+          select(timestamp) 
         tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
         sum_m <- sum(tmp_m) # Summe m
         #} # m Ende
@@ -96,7 +96,6 @@ likelihood <- function(i, params){
   }  # loop over all ad types
   return(sum_k_log)
 } # Funktion Ende
-
 # Define the prior density function. 
 prior <- function(alpha = NULL, beta = NULL, psi = NULL, 
                   mu = NULL, theta_mu = NULL, Sigma_mu = NULL) {
