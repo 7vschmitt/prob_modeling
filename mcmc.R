@@ -198,9 +198,9 @@ if(file.exists(counts_file)) {
   tailBetaAcc <- c(0, 0)
   tailPsiAcc <- c(0, 0)
   tailMuAcc <- c(0, 0)
-  varAlpha <- 0.5
-  varBeta <- 0.5
-  varPsi <- 0.5
+  varAlpha <- alpha_sd
+  varBeta <- beta_sd
+  varPsi <- psi_sd
   varMu <- rep(1.5, K)
 }
 
@@ -230,7 +230,7 @@ for ( ct in startCount:(trajLength-1) ) {
   alphaStar <- foreach(j = 1:nrow(currentPosition$alpha), .combine = rbind) %:% 
     foreach(k = 1:ncol(currentPosition$alpha)) %dopar% {
       rlnorm(1, meanlog = log(currentPosition$alpha[j,k]), 
-             sdlog = sqrt(log(1 + alpha_sd[j,k]^2 / currentPosition$alpha[j,k])))    
+             sdlog = sqrt(log(1 + varAlpha[j,k]^2 / currentPosition$alpha[j,k])))    
   } %>% unlist() %>% matrix(nrow=nrow(currentPosition$alpha))
   # Compute the probability of accepting the proposed jump.
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
@@ -263,7 +263,7 @@ for ( ct in startCount:(trajLength-1) ) {
   # }
   betaStar <- foreach(j = 1:length(currentPosition$beta), .combine = c) %dopar% {
     rlnorm(1, meanlog = log(currentPosition$beta[j]), 
-           sdlog = sqrt(log(1 + beta_sd[j]^2/currentPosition$beta[j]^2)))
+           sdlog = sqrt(log(1 + varBeta[j]^2/currentPosition$beta[j]^2)))
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
   probBeta <- exp((sum(calc_likelihoods(1:user_cnt, proposedBeta)) + 
@@ -288,7 +288,7 @@ for ( ct in startCount:(trajLength-1) ) {
     tailPsiAcc <- c(nPsiAccepted, nPsiRejected)
   }
   psiStar <- foreach(k = 1:length(currentPosition$psi), .combine = c) %dopar% {
-    rnorm(1, mean = currentPosition$psi[k], sd = psi_sd[k])
+    rnorm(1, mean = currentPosition$psi[k], sd = varPsi[k])
   }
   proposedPsi <- proposedParams(currentPosition, psi = psiStar)
   probPsi <- exp((sum(calc_likelihoods(1:user_cnt, proposedPsi)) + prior(psi = psiStar)$psi) - 
@@ -360,7 +360,7 @@ for ( ct in startCount:(trajLength-1) ) {
         t(log(currentPosition$mu[i, ]) - currentPosition$theta_mu)
     } + diag(K)
   )
-  v <- user_cnt - 1
+  v <- 1 + user_cnt
   SigmaMuStar <- riwish(S = S, v = v)
   # avoid assymetry through bad rounding
   if(!isSymmetric(SigmaMuStar)) SigmaMuStar <- makeSymmetric(SigmaMuStar)
