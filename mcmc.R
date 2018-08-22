@@ -160,7 +160,7 @@ trajLength = 50000 # arbitrary large number
 
 user_cnt = 25
 # Initialize the vector that will store the results:
-initals = list(mu=rep(c(0.01, 0.01, 0.01, 0.01), user_cnt) %>% 
+initals = list(mu=rep(exp(theta_mu_mean), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
                alpha = alpha_mean, 
                beta = beta_mean, 
@@ -313,7 +313,8 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   foreach(i = 1:user_cnt, .combine=rbind, .export = c("newPosition", "nMuAccepted", "nMuRejected")) %do% {
     muiStar <- foreach(k = 1:length(currentPosition$mu[i,]), .combine = cbind) %do% {
-      rlnorm(1, meanlog = log(currentPosition$mu[i,k]), sdlog = sqrt(log(1 + varMu^2 / currentPosition$mu[i,k]^2)))
+      rlnorm(1, meanlog = log(currentPosition$mu[i,k]), 
+             sdlog = sqrt(log(1 + varMu^2 / currentPosition$mu[i,k]^2)))
     }
     propMui <- currentPosition$mu
     propMui[i, ] <- muiStar
@@ -342,8 +343,12 @@ for ( ct in startCount:(trajLength-1) ) {
   Sigma_theta_mu <- 10^6 * I
   InvSigmaMu <- solve(currentPosition$Sigma_mu)
   InvSigmaThetaMu <- solve(Sigma_theta_mu)
-  B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
-  A <- t(B) %*% t( t(colSums(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
+  #B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
+  #A <- t(B) %*% t( t(colMeans(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
+  # Gelman formula p. 71
+  
+  B <- solve(user_cnt * InvSigmaMu + InvSigmaThetaMu)
+  A <- B %*% (user_cnt * InvSigmaMu %*% colMeans(log(currentPosition$mu)) + InvSigmaThetaMu %*% rep(0, K))
   if(!isSymmetric(B)) B <- makeSymmetric(B)
   
   thetaMuStar <- rmvnorm(1, mean = A, sigma = B) %>% as.numeric()
@@ -356,7 +361,7 @@ for ( ct in startCount:(trajLength-1) ) {
         t(log(currentPosition$mu[i, ]) - currentPosition$theta_mu)
     } + diag(K)
   )
-  v <- 4
+  v <- user_cnt - 1
   SigmaMuStar <- riwish(S = S, v = v)
   # avoid assymetry through bad rounding
   if(!isSymmetric(SigmaMuStar)) SigmaMuStar <- makeSymmetric(SigmaMuStar)
