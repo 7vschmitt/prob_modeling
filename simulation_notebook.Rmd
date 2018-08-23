@@ -71,23 +71,23 @@ names(psi_sd) <- ad_types
 first_click_prob <- c(1199, 418, 811) %>% prop.table()
 ```
 
-```{r results = 'asis', echo=F}
+```{r eval=FALSE, results = 'asis', echo=F}
 knitr::kable(alpha_mean, caption = "alpha", escape = F)
 ```
 
-```{r results = 'asis', echo=F}
+```{r eval=FALSE, results = 'asis', echo=F}
 knitr::kable(beta_mean, caption = "beta", escape = F)
 ```
 
-```{r results = 'asis', echo=F}
+```{r eval=FALSE, results = 'asis', echo=F}
 knitr::kable(theta_mu_mean, caption = "theta", escape = F)
 ```
 
-```{r results = 'asis', echo=F}
+```{r eval=FALSE, results = 'asis', echo=F}
 knitr::kable(Sigma_mu_mean, caption = "Sigma", escape = F)
 ```
 
-```{r results = 'asis', echo=F}
+```{r eval=FALSE, results = 'asis', echo=F}
 knitr::kable(psi_mean, caption = "psi", escape = F)
 ```
 
@@ -227,11 +227,11 @@ params <- draw_params()
 data <- do.call(simulate_user_clickstream, params)
 ```
 $j_0$ is set to type "`r ad_types[j_0]`" with $T=$ `r T`.
-```{r results = 'asis', echo=F}
+```{r , eval=FALSE, results = 'asis', echo=F}
 xtable(data.frame(time = data$timestamp, event = data$event), caption = "Simulated click stream")
 ```
 ## Simulate for multiple users and plot their click streams.
-```{r}
+```{r, eval=FALSE}
 sim_cnt <- 5
 ```
 Simulate for `r sim_cnt` users.
@@ -255,7 +255,7 @@ sim_data <- function(count) {
 }
 ```
 
-```{r}
+```{r, eval=FALSE}
 users <- sim_data(sim_cnt)
 ggplot(users, aes(x = timestamp, y = user, 
                   label = event, color = factor(event), 
@@ -272,12 +272,14 @@ data_file <- "sim_data"
 if(file.exists(data_file)) {
   load(data_file) 
 } else {
+  set.seed(1899)
   data <- sim_data(n)
   save(data, file = data_file)
 }
 
 ```
-```{r}
+
+```{r, eval=FALSE}
 data %>% 
   filter(event != 'purchase') %>%
   group_by(event) %>% 
@@ -286,7 +288,7 @@ data %>%
   knitr::kable(caption = "Ad click ratio")
 ```
 
-```{r}
+```{r, eval=FALSE}
 data %>%
   mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
                               'search' = 'S', 'display' = 'D')) %>%
@@ -304,7 +306,8 @@ data %>%
   head(n=20) %>%
   knitr::kable(caption = "Most frequent click combinations ending with a purchase")
 ```
-```{r}
+
+```{r, eval=FALSE}
 data %>%
   mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
                               'search' = 'S', 'display' = 'D')) %>%
@@ -322,7 +325,7 @@ data %>%
   knitr::kable(caption = "Longest click streams")
 ```
 Most common click streams
-```{r}
+```{r, eval=FALSE}
 data %>%
   mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
                               'search' = 'S', 'display' = 'D')) %>%
@@ -336,8 +339,8 @@ data %>%
   arrange(desc(n)) %>% 
   head(n=100)
 ```
-Most ommon click streams with purchases
-```{r}
+Most common click streams with purchases
+```{r, eval=FALSE}
 data %>%
   mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
                               'search' = 'S', 'display' = 'D')) %>%
@@ -352,6 +355,8 @@ data %>%
   arrange(desc(n)) %>% 
   head(n=100)
 ```
+
+
 ```{r}
 all_comb <- expand.grid(user = data$user %>% unique, event = ad_types)
 event_counts <- data %>%
@@ -361,15 +366,19 @@ event_counts <- data %>%
   left_join(all_comb, ., by = c('user', 'event')) %>%
   mutate_if(is.integer, funs(replace(., is.na(.), 0)))
 rm(all_comb)
+
+```
+
+```{r, eval=FALSE}
+event_counts %>%
+  ggplot(aes(y = n, x = event)) +
+  geom_boxplot()
+```
+```{r, eval=FALSE}
 event_counts %>%
   ggplot(aes(y = n, x = event)) +
   geom_boxplot() + 
   ylim(c(0, 5))
-```
-```{r}
-event_counts %>%
-  ggplot(aes(y = n, x = event)) +
-  geom_boxplot()
 ```
 
 ## Bring data into correct format
@@ -396,136 +405,10 @@ levels(data_new$event) <- c(2,3,4,1)
 ```
 
 
-Testparameter
-```{r}
-i <- 9 # user
-k <- 2 # display
-l <- 1 # zweiter Klick auf display
-j <- 1 # search
-m <- 2 # zweiter Klick auf search waehrend schon 2 mal auf display geklickt wurde
-```
-
-# Likelihood function
-```{r}
-likelihood <- function(i, params){
-  llAlpha <- params$alpha
-  llBeta <- params$beta
-  llPsi <- params$psi
-  llMu <- params$mu
-  prod_k <- 1 # wird spaeter mit ergebnis aus k-loop multipliziert
-  for (k in 1:length(ad_types)){
-    prod_l <- 1 # wird sp?ter mit ergebnis aus l-loop multipliziert
-    if (total_counts[i , k+1] != 0){
-      first_two_lines <- numeric()
-      for (l in 1:(total_counts[i , k+1])){ 
-        first_line <- llMu[i,k] * exp(llPsi[k] * (data_new %>% 
-                                              filter(user == i & event == k) %>%
-                                                  .[l, ] %>% 
-                                                  select(purchase))) %>% 
-          as.numeric() # erste Zeile
-        
-        sum_j <- numeric()
-        for (j in 1:3){ # zweite Zeile erste summe 1:K-1
-          # j schleife umgehen
-            sum_index <- ifelse(data_new %>% 
-                                  filter(user == i & event == k) %>% 
-                                  plyr::empty(), #if is empty
-                                0, #then
-                                data_new %>% #else
-                                  filter(user == i & event == k) %>% 
-                                  filter(row_number() ==l) %>% 
-                                  select(j+3) %>% as.numeric()
-                                )
-            if (sum_index > 0){
-            sum_m <- numeric()
-            t_l <- data_new %>% 
-              filter(user ==i & event==k) %>% 
-              filter(row_number() == l) %>% 
-              select(timestamp) %>% as.numeric()
-            t_m <- data_new %>% filter(user ==i & event==j) %>% 
-              select(timestamp) 
-            # second line:
-            sum_m <- llAlpha[j,k] * exp(-llBeta[j] * (t_l - t_m[1:sum_index,]))
-              
-              } else {sum_m <- 0} 
-            sum_j[j] <- sum(sum_m) # Summe j
-            } # j Ende
-        first_two_lines[l] <- first_line + sum(sum_j) # erste und zweite Zeile
-      } 
-    } else {
-      first_two_lines <- 1
-    }
-    prod_l <- prod(first_two_lines)
-    
-      # Produkt ueber l; wenn von 1 bis 0, dann ergebnis auf 0 setzen
-    sum_m <- 0
-    purchase_cnt <- total_counts[i,5]
-    if (purchase_cnt > 0){
-    for (m in 0:(purchase_cnt-1)){ # 0 bis Anzahl Kaeufe in 120 Tagen -1
-      t_m1 <- data_new %>% filter(user ==i & event == K) %>% 
-                         filter(row_number() == m+1) %>% 
-                         select(timestamp) %>% 
-                         as.numeric()
-      t_m <- ifelse(m == 0, 
-                    0,
-                    ifelse(purchase_cnt != 0, 
-                           data_new %>% filter(user ==i & event == K) %>% 
-                             filter(row_number() == m) %>% 
-                             select(timestamp) %>% as.numeric, 
-                           0)
-      )
-      tmp_m <- exp(llPsi[k]*(m+1))*(t_m1 - t_m)
-      sum_m <- sum_m + tmp_m # Summe m
-    } # m Ende
-    exponent_teil1 <- sum_m * llMu[i,k]
-    } # if ende
-    else {exponent_teil1 <- 0}
-    browser(expr = is.na(exponent_teil1))
-    exponent_teil2 <- 0
-    for (j in 1:3){ # letzte Zeile erste Summe
-      # j schleife umgehen?
-      sum_m <- numeric()
-      if (total_counts[i,j+1] > 0) {
-        #for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
-          t_m_neu <- data_new %>% filter(user ==i, event == j) %>% 
-            #filter(row_number() == m) %>% 
-            select(timestamp) # %>% as.numeric()
-          tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
-          sum_m <- sum(tmp_m) # Summe m
-        #} # m Ende
-        exponent_teil2 <- exponent_teil2 + sum_m
-      } 
-    } # j Ende
-    exponent <- exponent_teil1 - exponent_teil2
-    third_fourth_line <- exp(exponent) 
-    
-    prod_k <- ((prod_l * third_fourth_line) * prod_k) %>% as.numeric() # Prdoukt aus Zeil 1+2 und Zeile 3-4  
-  }  # loop over all ad types
-  return(prod_k)
-} # Funktion Ende
-```
-
-```{r}
-load("mcmc_trajectory")
-trajectory[[1]]
-params <- trajectory[[1]]
-
-for (i in 1:25){
-  print(log_likelihood(i, params))
-}
-
-library(doParallel)
-cl <- makeCluster(2)
-registerDoParallel(cl)
-system.time({ foreach(i = 1:25, .combine = c, .packages = "dplyr") %dopar% {log_likelihood(i, params = params)} })[3]
-
-stopCluster(cl)
-```
-
 # Log Likelihood
 
 ```{r}
-log_likelihood <- function(i, params){
+likelihood <- function(i, params){
   llAlpha <- params$alpha
   llBeta <- params$beta
   llPsi <- params$psi
