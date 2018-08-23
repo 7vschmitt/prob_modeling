@@ -59,6 +59,7 @@ likelihood <- function(i, params){
         # 0 bis Anzahl Kaeufe in 120 Tagen -1
         if(data_new_i %>% filter(event == K) %>% 
            nrow() >= m+1){
+          
           t_m1 <- data_new_i %>% filter(event == K) %>% 
             filter(row_number() == m+1) %>% 
             select(timestamp) %>% 
@@ -73,7 +74,7 @@ likelihood <- function(i, params){
         } else {tmp_m <- 0}
         sum_m <- sum_m + tmp_m # Summe m
       } # m Ende
-      exponent_teil1 <- sum_m * llMu[k]
+      exponent_teil1 <- sum_m * -llMu[k]
       
     } # if ende
     else {exponent_teil1 <- 0}
