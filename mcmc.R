@@ -55,20 +55,22 @@ likelihood <- function(i, params){
     sum_m <- 0
     purchase_cnt <- total_counts[i,5]
     if (purchase_cnt > 0){
-      for (m in 0:(purchase_cnt-1)){ # 0 bis Anzahl Kaeufe in 120 Tagen -1
-        t_m1 <- data_new_i %>% filter(event == K) %>% 
-          filter(row_number() == m+1) %>% 
-          select(timestamp) %>% 
-          as.numeric()
-        t_m <- ifelse(m == 0, 
-                      0,
-                      ifelse(purchase_cnt != 0, 
-                             data_new_i %>% filter(event == K) %>% 
-                               filter(row_number() == m) %>% 
-                               select(timestamp) %>% as.numeric, 
-                             0)
-        )
-        tmp_m <- exp(llPsi[k]*(m+1))*(t_m1 - t_m)
+      for (m in 0:purchase_cnt){
+        # 0 bis Anzahl Kaeufe in 120 Tagen -1
+        if(data_new_i %>% filter(event == K) %>% 
+           nrow() >= m+1){
+          t_m1 <- data_new_i %>% filter(event == K) %>% 
+            filter(row_number() == m+1) %>% 
+            select(timestamp) %>% 
+            as.numeric()
+          t_m <- ifelse(m == 0, 
+                        0,
+                        data_new_i %>% filter(event == K) %>% 
+                          filter(row_number() == m) %>% 
+                          select(timestamp) %>% as.numeric()
+          )
+          tmp_m <- exp(llPsi[k]*m)*(t_m1 - t_m)
+        } else {tmp_m <- 0}
         sum_m <- sum_m + tmp_m # Summe m
       } # m Ende
       exponent_teil1 <- sum_m * llMu[k]
@@ -81,9 +83,10 @@ likelihood <- function(i, params){
       # j schleife umgehen?
       sum_m <- numeric()
       if (total_counts[i,j+1] > 0) {
-        # letzte Zeile zweite Summe
+        #for (m in 1:total_counts[i,j+1]){ # letzte Zeile zweite Summe
         t_m_neu <- data_new_i %>% filter(event == j) %>% 
-          select(timestamp) 
+          #filter(row_number() == m) %>% 
+          select(timestamp) # %>% as.numeric()
         tmp_m <- (llAlpha[j,k]/llBeta[j]) * (1-exp(-llBeta[j] * (T - t_m_neu)))
         sum_m <- sum(tmp_m) # Summe m
         #} # m Ende
