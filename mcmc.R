@@ -114,7 +114,8 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   }
   if(!is.null(mu)) {
     result$mu <- foreach(m=iter(mu, by = 'row'), .combine = rbind) %dopar% 
-      exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu, log = T))
+      #exp(dmvnorm(m, mean = theta_mu, sigma = Sigma_mu, log = T))
+      dlnorm.rplus(m, theta_mu, Sigma_mu) %>% log
   }
   if(!is.null(theta_mu)) {
     result$theta_mu <- dmvnorm(theta_mu, 
@@ -198,10 +199,10 @@ if(file.exists(counts_file)) {
   tailBetaAcc <- c(0, 0)
   tailPsiAcc <- c(0, 0)
   tailMuAcc <- c(0, 0)
-  varAlpha <- alpha_sd
-  varBeta <- beta_sd
-  varPsi <- psi_sd
-  varMu <- rep(1.5, K)
+  varAlpha <- alpha_sd * 1.5
+  varBeta <- beta_sd * 1.5
+  varPsi <- psi_sd * 1.5
+  varMu <- rep(0.001, K)
 }
 
 
@@ -236,8 +237,8 @@ for ( ct in startCount:(trajLength-1) ) {
   proposedAlpha <- proposedParams(currentPosition, alpha=alphaStar)
   # exp(log(proposed) - log(current)) = proposed/current
   probAlpha <- exp((sum(calc_likelihoods(1:user_cnt, proposedAlpha)) + 
-                  sum(prior(alpha = alphaStar)$alpha) + sum(log(alphaStar))) - 
-    (sum_ll + sum(priors$alpha) + sum(log(currentPosition$alpha))))
+                  sum(prior(alpha = alphaStar)$alpha)) - 
+    (sum_ll + sum(priors$alpha)))
   probAlpha <- ifelse(is.nan(probAlpha),0 , probAlpha)
   alphaStarAccept <- min(1, probAlpha)
   
@@ -267,8 +268,8 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   proposedBeta <- proposedParams(currentPosition, beta=betaStar)
   probBeta <- exp((sum(calc_likelihoods(1:user_cnt, proposedBeta)) + 
-                 sum(prior(beta = betaStar)$beta) + sum(log(betaStar))) - 
-    (sum_ll + sum(priors$beta) + sum(log(currentPosition$beta))))
+                 sum(prior(beta = betaStar)$beta)) - 
+    (sum_ll + sum(priors$beta)))
   probBeta <- ifelse(is.nan(probBeta), 0, probBeta)
   betaStarAccept <- min(1, probBeta)
   if (runif(1) < betaStarAccept) {
@@ -321,8 +322,8 @@ for ( ct in startCount:(trajLength-1) ) {
     probMui <- exp((calc_likelihoods(i, proposedMu) + 
                   prior(mu = muiStar, 
                         theta_mu = currentPosition$theta_mu, 
-                        Sigma_mu = currentPosition$Sigma_mu)$mu + sum(log(muiStar))) - 
-      (current_lls[i] + priors$mu[i] + sum(log(currentPosition$mu[i,]))))
+                        Sigma_mu = currentPosition$Sigma_mu)$mu) - 
+      (current_lls[i] + priors$mu[i]))
     probMui <- ifelse(is.nan(probMui), 0, probMui)
     muiStarAccept <- min(1, probMui)
     
