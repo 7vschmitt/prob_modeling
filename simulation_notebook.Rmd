@@ -4,7 +4,7 @@ output: pdf_document
 ---
 
 ```{r echo=FALSE}
-want = c("MASS", "mvtnorm", "tidyverse", "xtable", "MCMCpack", "doParallel")
+want = c("MASS", "mvtnorm", "tidyverse", "xtable", "MCMCpack", "doParallel", "compositions")
 have = want %in% rownames(installed.packages())
 if ( any(!have) ) { install.packages(want[!have], quiet = TRUE, verbose = FALSE) }
 
