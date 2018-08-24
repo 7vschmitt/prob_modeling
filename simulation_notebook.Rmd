@@ -4,7 +4,7 @@ output: pdf_document
 ---
 
 ```{r echo=FALSE}
-want = c("MASS", "mvtnorm", "tidyverse", "xtable", "MCMCpack", "doParallel", "compositions")
+want = c("MASS", "mvtnorm", "tidyverse", "xtable", "MCMCpack", "doParallel", "compositions", "coda")
 have = want %in% rownames(installed.packages())
 if ( any(!have) ) { install.packages(want[!have], quiet = TRUE, verbose = FALSE) }
 
@@ -337,7 +337,7 @@ data %>%
   group_by(stream) %>%
   summarise(n = n()) %>%
   arrange(desc(n)) %>% 
-  head(n=100)
+  head(n=25)
 ```
 Most common click streams with purchases
 ```{r, eval=FALSE}
@@ -353,7 +353,7 @@ data %>%
   group_by(stream) %>%
   summarise(n = n()) %>%
   arrange(desc(n)) %>% 
-  head(n=100)
+  head(n=25)
 ```
 
 
@@ -379,6 +379,62 @@ event_counts %>%
   ggplot(aes(y = n, x = event)) +
   geom_boxplot() + 
   ylim(c(0, 5))
+```
+Transistion Matrix for 100 users
+```{r}
+streams <- data %>%
+  mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
+                              'search' = 'S', 'display' = 'D')) %>%
+  group_by(user) %>%
+  summarise(stream = paste(event_short, collapse = "")) %>%
+  head(100) %>% 
+  select(stream) %>%
+  filter(nchar(stream) > 1) %>%
+  .$stream %>% 
+  as.vector()
+
+adj_list <- foreach(s = iter(streams), .combine = append) %dopar% {
+  substring(s, 1:(nchar(s) - 1), 2:nchar(s)) %>% str_split(pattern = "")
+}
+
+adj_mat <- matrix(rep(0, K * K), 
+                  ncol = K, 
+                  dimnames = list(c("S", "D", "O", "P"), c("S", "D", "O", "P"))) 
+ 
+for(i in adj_list) {
+  adj_mat[i[1], i[2]] <- adj_mat[i[1], i[2]] + 1
+}
+rownames(adj_mat) <- ad_types
+colnames(adj_mat) <- ad_types
+adj_mat %>% xtable(caption = "Transition matrix for events related to 100 users.", label = "tab_trans_100", digits = 0)
+```
+Transistion Matrix for 500 users
+```{r}
+streams <- data %>%
+  mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
+                              'search' = 'S', 'display' = 'D')) %>%
+  group_by(user) %>%
+  summarise(stream = paste(event_short, collapse = "")) %>%
+  head(500) %>% 
+  select(stream) %>%
+  filter(nchar(stream) > 1) %>%
+  .$stream %>% 
+  as.vector()
+
+adj_list <- foreach(s = iter(streams), .combine = append) %dopar% {
+  substring(s, 1:(nchar(s) - 1), 2:nchar(s)) %>% str_split(pattern = "")
+}
+
+adj_mat <- matrix(rep(0, K * K), 
+                  ncol = K, 
+                  dimnames = list(c("S", "D", "O", "P"), c("S", "D", "O", "P"))) 
+ 
+for(i in adj_list) {
+  adj_mat[i[1], i[2]] <- adj_mat[i[1], i[2]] + 1
+}
+rownames(adj_mat) <- ad_types
+colnames(adj_mat) <- ad_types
+adj_mat %>% xtable(caption = "Transition matrix for events related to 500 users.", label = "tab_trans_500", digits = 0)
 ```
 
 ## Bring data into correct format
@@ -513,4 +569,31 @@ likelihood <- function(i, params){
 
 
 # Parameter estimation
-## MCMC Model
+
+Run MCMC or load eisting results
+```{r}
+if(file.exists('mcmc_trajectory')) {
+  load('mcmc_trajectory')
+} else {
+  source('mcmc.R')
+}
+```
+Estimated $\alpha$
+```{r}
+burnIn <- 0.25 * length(trajectory)
+alpha_estimated <- foreach(a = iter(trajectory[burnIn:length(trajectory)]), 
+                           .combine = '+') %dopar% {a$alpha} / length(trajectory)
+
+rownames(alpha_estimated) <- ad_types[1:K-1]
+colnames(alpha_estimated) <- ad_types
+alpha_estimated %>% xtable(caption= "Estimated $\\alpha$ parameters for 100 users after 2000 iterations with burn rate of 0.25", label = "tab_alpha_est_100", display = c('s', rep('e', K)))
+```
+
+```{r}
+theta_mu_estimated <- foreach(t = iter(trajectory[burnIn:length(trajectory)]), .combine = rbind) %dopar% 
+  t$theta_mu %>% colMeans
+
+names(theta_mu_estimated) <- ad_types
+
+```
+
