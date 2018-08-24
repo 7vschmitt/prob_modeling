@@ -1,3 +1,4 @@
+source('mcmc_diag_utils.R')
 # Define the Bernoulli likelihood function, p(D|theta).
 # The argument theta could be a vector, not just a scalar.
 likelihood <- function(i, params){
@@ -106,10 +107,11 @@ prior <- function(alpha = NULL, beta = NULL, psi = NULL,
   result <- list()
   if(!is.null(alpha)) {
     result$alpha <- foreach(i=iter(alpha), .combine = rbind) %dopar% { 
-      dgamma(i, .5, .5, log = T) } %>% matrix(nrow=nrow(alpha))
+      dgamma(i, .5, .5, log = T) %>% ifelse(is.infinite(.), .Machine$double.xmin, .) 
+      } %>% matrix(nrow=nrow(alpha))
   }
   if(!is.null(beta)) {
-    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, 25, .5, log = T)
+    result$beta <- foreach(i=iter(beta), .combine = c) %dopar% dgamma(i, .5, .5, log = T)
   }
   if(!is.null(psi)) {
     result$psi <- dmvnorm(psi, 
@@ -162,7 +164,7 @@ adjustVariance <- function(var, nAccept, nReject) {
 # Specify the length of the trajectory, i.e., the number of jumps to try:
 trajLength = 50000 # arbitrary large number
 
-user_cnt = 25
+user_cnt = 100
 # Initialize the vector that will store the results:
 initals = list(mu=rep(exp(theta_mu_mean), user_cnt) %>% 
                  matrix(ncol = 4, byrow = T), 
@@ -185,7 +187,7 @@ if(file.exists(trajectory_file)) {
   startCount <- 1
 }
 # Specify the burn-in period:
-burnIn = ceiling( 0.0 * trajLength ) # arbitrary number, less than trajLength
+burnIn = ceiling( 0.25 * trajLength ) # arbitrary number, less than trajLength
 # Initialize accepted, rejected counters, just to monitor performance:
 counts_file <- "mcmc_counts"
 if(file.exists(counts_file)) {
@@ -203,10 +205,10 @@ if(file.exists(counts_file)) {
   tailBetaAcc <- c(0, 0)
   tailPsiAcc <- c(0, 0)
   tailMuAcc <- c(0, 0)
-  varAlpha <- alpha_sd * 1.5
-  varBeta <- beta_sd * 1.5
-  varPsi <- psi_sd * 1.5
-  varMu <- rep(0.001, K)
+  varAlpha <- alpha_sd * 6
+  varBeta <- beta_sd * 4
+  varPsi <- psi_sd
+  varMu <- rep(0.00005, K)
 }
 
 
@@ -229,9 +231,6 @@ for ( ct in startCount:(trajLength-1) ) {
     varAlpha <- adjustVariance(varAlpha, nAlphaAccepted - tailAlphaAcc[1], nAlphaRejected - tailAlphaAcc[2])
     tailAlphaAcc <- c(nAlphaAccepted, nAlphaRejected)
   }
-  # alphaStar <- foreach(a=iter(c(currentPosition$alpha)), .combine = c) %dopar% {
-  #   exp(rnorm(1, mean = log(a), sd = varAlpha))
-  # } %>% matrix(nrow=nrow(currentPosition$alpha))
   alphaStar <- foreach(j = 1:nrow(currentPosition$alpha), .combine = rbind) %:% 
     foreach(k = 1:ncol(currentPosition$alpha)) %dopar% {
       rlnorm(1, meanlog = log(currentPosition$alpha[j,k]), 
@@ -263,9 +262,6 @@ for ( ct in startCount:(trajLength-1) ) {
     varBeta <- adjustVariance(varBeta, nBetaAccepted - tailBetaAcc[1], nBetaRejected - tailBetaAcc[2])
     tailBetaAcc <- c(nBetaAccepted, nBetaRejected)
   }
-  # betaStar <- foreach(b=iter(currentPosition$beta), .combine = c) %dopar% {
-  #   exp(rnorm(1, mean = log(b), sd = varBeta))
-  # }
   betaStar <- foreach(j = 1:length(currentPosition$beta), .combine = c) %dopar% {
     rlnorm(1, meanlog = log(currentPosition$beta[j]), 
            sdlog = sqrt(log(1 + varBeta[j]^2/currentPosition$beta[j]^2)))
@@ -287,7 +283,6 @@ for ( ct in startCount:(trajLength-1) ) {
   }
   
   #### draw psi
-  acceptRate <- nPsiAccepted / nPsiRejected
   if(ct %% 10 == 0) {
     varPsi <- adjustVariance(varPsi, nPsiAccepted - tailPsiAcc[1], nPsiRejected - tailPsiAcc[2])
     tailPsiAcc <- c(nPsiAccepted, nPsiRejected)
@@ -349,7 +344,7 @@ for ( ct in startCount:(trajLength-1) ) {
   InvSigmaThetaMu <- solve(Sigma_theta_mu)
   #B <- solve(I %*% InvSigmaMu + InvSigmaThetaMu)
   #A <- t(B) %*% t( t(colMeans(log(currentPosition$mu))) %*% InvSigmaMu + rep(0, K) %*% InvSigmaThetaMu )
-  # Gelman formula p. 71
+  # use Gelman p. 71 instead
   
   B <- solve(user_cnt * InvSigmaMu + InvSigmaThetaMu)
   A <- B %*% (user_cnt * InvSigmaMu %*% colMeans(log(currentPosition$mu)) + InvSigmaThetaMu %*% rep(0, K))
@@ -397,48 +392,15 @@ for ( ct in startCount:(trajLength-1) ) {
          file = counts_file)
   } 
 }
-
-# Extract the post-burnIn portion of the trajectory.
-acceptedTraj = trajectory[ (burnIn+1) : length(trajectory) ]
-
 # End of Metropolis algorithm.
 
-#-----------------------------------------------------------------------
-# Display the chain.
+# Extract the post-burnIn portion of the trajectory.
+acceptedTraj <- trajectory[ (burnIn+1) : length(trajectory) ]
 
-# openGraph(width=4,height=8)
-# layout( matrix(1:3,nrow=3) )
-# par(mar=c(3,4,2,1),mgp=c(2,0.7,0))
-# 
-# # Posterior histogram:
-# paramInfo = plotPost( acceptedTraj$alpha[1,1] , xlim=c(0,1) , xlab=bquote(theta) , 
-#                       cex.main=2.0 ,
-#                       main=bquote( list( "Prpsl.SD" == .(proposalSD) ,
-#                                          "Eff.Sz." == .(round(effectiveSize(acceptedTraj),1)) ) ) )
-# 
-# # Trajectory, a.k.a. trace plot, end of chain:
-# idxToPlot = (trajLength-100):trajLength
-# plot( trajectory[idxToPlot]$alpha[1,1] , idxToPlot , main="End of Chain" ,
-#       xlab=bquote(alpha[1,1]) , xlim=c(0,1) , ylab="Step in Chain" ,
-#       type="o" , pch=20 , col="skyblue" , cex.lab=1.5 )
-# # Display proposal SD and acceptance ratio in the plot.
-# text( 0.0 , trajLength , adj=c(0.0,1.1) , cex=1.75 ,
-#       labels = bquote( frac(N[acc],N[pro]) == 
-#                          .(signif( nAlphaAccepted/length(acceptedTraj) , 3 ))))
-# 
-# # Trajectory, a.k.a. trace plot, beginning of chain:
-# idxToPlot = 1:100
-# plot( trajectory[idxToPlot] , idxToPlot , main="Beginning of Chain" ,
-#       xlab=bquote(theta) , xlim=c(0,1) , ylab="Step in Chain" ,
-#       type="o" , pch=20 , col="skyblue" , cex.lab=1.5 )
-# # Indicate burn in limit (might not be visible if not in range):
-# if ( burnIn > 0 ) {
-#   abline(h=burnIn,lty="dotted")
-#   text( 0.5 , burnIn+1 , "Burn In" , adj=c(0.5,1.1) )
-# }
-# 
-# #saveGraph( file=paste0( "MCMC" , 
-# #                        "SD" , proposalSD ,
-# #                        "Init" , trajectory[1] ) , type="eps" )
-# 
-# #------------------------------------------------------------------------
+alphaMcmc <- map(acceptedTraj, ~ .$alpha[1,1] ) %>% unlist %>% as.mcmc
+plotPost( alphaMcmc )
+traceplot(alphaMcmc)
+
+
+
+
