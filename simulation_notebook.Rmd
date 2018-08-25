@@ -383,11 +383,11 @@ event_counts %>%
 Transistion Matrix for 100 users
 ```{r}
 streams <- data %>%
+  filter(user %in% 1:user_cnt) %>% 
   mutate(event_short = recode(event, 'purchase' = 'P', 'other' = 'O', 
                               'search' = 'S', 'display' = 'D')) %>%
   group_by(user) %>%
   summarise(stream = paste(event_short, collapse = "")) %>%
-  head(100) %>% 
   select(stream) %>%
   filter(nchar(stream) > 1) %>%
   .$stream %>% 
@@ -569,11 +569,11 @@ likelihood <- function(i, params){
 
 
 # Parameter estimation
-
+## 100 Users
 Run MCMC or load eisting results
 ```{r}
 if(file.exists('mcmc_trajectory')) {
-  load('mcmc_trajectory')
+  load('results/mcmc_trajectory_bak_100u_2000i')
 } else {
   source('mcmc.R')
 }
@@ -588,12 +588,41 @@ rownames(alpha_estimated) <- ad_types[1:K-1]
 colnames(alpha_estimated) <- ad_types
 alpha_estimated %>% xtable(caption= "Estimated $\\alpha$ parameters for 100 users after 2000 iterations with burn rate of 0.25", label = "tab_alpha_est_100", display = c('s', rep('e', K)))
 ```
-
+Estimated $\theta_{\mu}$
 ```{r}
 theta_mu_estimated <- foreach(t = iter(trajectory[burnIn:length(trajectory)]), .combine = rbind) %dopar% 
-  t$theta_mu %>% colMeans
+  t$theta_mu %>% colMeans %>% matrix(ncol = K)
 
-names(theta_mu_estimated) <- ad_types
+colnames(theta_mu_estimated) <- ad_types
+theta_mu_estimated  %>% 
+  xtable(caption="Estimated $\\theta_{\\mu}$ after 2000 iteration with burn in rate of 0.25.",
+                              label = "tab_theta_est_100", digits = 5, display = c('s',rep('g', K)))
+```
+Estimated $\psi$
+```{r}
+psi_estimated <- foreach(t = iter(trajectory[burnIn:length(trajectory)]), .combine = rbind) %dopar% 
+  t$psi %>% colMeans %>% matrix(ncol = K)
 
+colnames(psi_estimated) <- ad_types
+psi_estimated %>% xtable(caption = "Estimated $\\psi$ for 100 users after 2000 iteration with burn in rate of 0.25.", digits = 5, display = c('s',rep('g', K)), label = "tab_psi_est_100")
+```
+Estimated $\beta$
+```{r}
+beta_estimated <- foreach(t = iter(trajectory[burnIn:length(trajectory)]), .combine = rbind) %dopar% 
+  t$beta %>% colMeans %>% matrix(ncol = K-1)
+
+colnames(beta_estimated) <- ad_types[1:K-1]
+
+beta_estimated %>% xtable(caption = "Estimated $\\beta$ for 100 users after 2000 iteration with burn in rate of 0.25.", digits = 5, display = c('s',rep('g', K-1)), label = "tab_beta_est_100")
+```
+Estimated $\Sigma_{\mu}$
+
+```{r}
+Sigma_estimated <- foreach(a = iter(trajectory[burnIn:length(trajectory)]), 
+                           .combine = '+') %dopar% {a$Sigma_mu} / length(trajectory)
+
+rownames(Sigma_estimated) <- ad_types
+colnames(Sigma_estimated) <- ad_types
+Sigma_estimated %>% xtable(caption= "Estimated $\\Sigma_{\\mu}$ parameters for 100 users after 2000 iterations with burn rate of 0.25", label = "tab_sigma_est_100", display = c('s', rep('e', K)))
 ```
 
